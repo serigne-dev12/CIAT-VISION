@@ -1,0 +1,55 @@
+# Blueprint Render : base PostgreSQL + API FastAPI + site statique React.
+# Déploiement : Render > New > Blueprint > choisir le dépôt Git (voir docs/06_guide_installation.md § 5).
+databases:
+  - name: ciat-vision-db
+    plan: free
+    databaseName: ciat_vision
+    user: ciat_vision
+
+services:
+  - type: web
+    name: ciat-vision-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    # Les migrations sont appliquées à chaque démarrage (idempotent) avant de lancer l'API
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.8"
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ciat-vision-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: https://ciat-vision.onrender.com   # à adapter à l'adresse réelle du site statique
+      - key: ANTHROPIC_API_KEY
+        sync: false   # saisie manuelle dans le tableau de bord Render (facultative : sinon mode dégradé)
+      - key: CREATE_DEMO_ACCOUNTS
+        value: "true"
+      - key: SEED_SIMULATED_DATA
+        value: "true"
+
+  - type: web
+    name: ciat-vision
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://ciat-vision-api.onrender.com   # à adapter à l'adresse réelle de l'API
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY

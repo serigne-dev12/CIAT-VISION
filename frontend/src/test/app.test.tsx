@@ -1,0 +1,86 @@
+/** Tests du frontend : mise en forme, permissions, composants et connexion (API simulée). */
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { AuthProvider } from "../auth/AuthContext";
+import KpiCard from "../components/KpiCard";
+import { Pagination, StatusBadge } from "../components/ui";
+import { fmtFCFA, fmtKpi, fmtTaux, peut } from "../lib/format";
+import LoginPage from "../pages/LoginPage";
+
+afterEach(() => { vi.restoreAllMocks(); sessionStorage.clear(); });
+
+describe("mise en forme française", () => {
+  it("formate montants, taux et valeurs non calculables", () => {
+    expect(fmtFCFA(12500000).replace(/\s/g, " ")).toBe("12 500 000 FCFA");
+    expect(fmtTaux(0.4453)).toBe("44,5 %");
+    expect(fmtTaux(null)).toBe("—");
+    expect(fmtKpi(null, "rate")).toBe("—");
+    expect(fmtKpi(64.7, "percent")).toBe("64,7 %");
+  });
+});
+
+describe("matrice des droits (affichage)", () => {
+  it("n'autorise la modification qu'aux administrateurs et coordonnateurs", () => {
+    expect(peut("admin", "modifier")).toBe(true);
+    expect(peut("coordinator", "modifier")).toBe(true);
+    expect(peut("analyst", "modifier")).toBe(false);
+    expect(peut("coordinator", "administrer")).toBe(false);
+    expect(peut(undefined, "importer")).toBe(false);
+  });
+});
+
+describe("composants", () => {
+  it("la carte KPI affiche la valeur calculée et sa définition", () => {
+    render(<KpiCard kpi={{ key: "selection_rate", label: "Taux de sélection", unit: "rate", value: 0.5, definition: "Acceptées ÷ décidées." }} />);
+    expect(screen.getByText("50,0 %")).toBeInTheDocument();
+    expect(screen.getByText("Acceptées ÷ décidées.")).toBeInTheDocument();
+  });
+
+  it("la pastille de statut affiche le libellé", () => {
+    render(<StatusBadge status="En incubation" />);
+    expect(screen.getByText("En incubation")).toBeInTheDocument();
+  });
+
+  it("la pagination désactive les boutons aux extrémités", async () => {
+    const onChange = vi.fn();
+    render(<Pagination page={1} pageSize={20} total={45} onChange={onChange} />);
+    expect(screen.getByText("1 / 3")).toBeInTheDocument();
+    expect(screen.getByLabelText("Page précédente")).toBeDisabled();
+    await userEvent.click(screen.getByLabelText("Page suivante"));
+    expect(onChange).toHaveBeenCalledWith(2);
+  });
+});
+
+describe("connexion", () => {
+  const afficher = () => render(<MemoryRouter><AuthProvider><LoginPage /></AuthProvider></MemoryRouter>);
+
+  it("exige identifiant et mot de passe", async () => {
+    afficher();
+    await userEvent.click(screen.getByRole("button", { name: /se connecter/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Saisissez votre identifiant");
+  });
+
+  it("affiche le message d'erreur renvoyé par l'API", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ detail: "Identifiant ou mot de passe incorrect." }), { status: 401 }));
+    afficher();
+    await userEvent.type(screen.getByLabelText("Identifiant"), "admin");
+    await userEvent.type(screen.getByLabelText("Mot de passe"), "faux");
+    await userEvent.click(screen.getByRole("button", { name: /se connecter/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Identifiant ou mot de passe incorrect.");
+  });
+
+  it("enregistre le jeton après une connexion réussie", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      access_token: "jeton-test", expires_at: new Date(Date.now() + 3600e3).toISOString(),
+      user: { id: 1, username: "admin", full_name: "Admin", email: null, role: "admin", is_active: true },
+    }), { status: 200 }));
+    afficher();
+    await userEvent.type(screen.getByLabelText("Identifiant"), "admin");
+    await userEvent.type(screen.getByLabelText("Mot de passe"), "Admin@2026");
+    await userEvent.click(screen.getByRole("button", { name: /se connecter/i }));
+    await waitFor(() => expect(sessionStorage.getItem("ciat_vision_token")).toBe("jeton-test"));
+  });
+});

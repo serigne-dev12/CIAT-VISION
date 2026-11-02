@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+/* Charte graphique CIAT VISION (cahier des charges § 9) */
+@theme {
+  --color-brun: #4C311F;
+  --color-brun-clair: #6A4A35;
+  --color-beige: #CA9871;
+  --color-beige-fonce: #A8774F; /* variante de beige lisible sur fond blanc (texte) */
+  --color-beige-pale: #F6EEE6;
+  --color-profond: #362316;
+  --color-gris: #F5F5F5;
+  --color-texte: #2B211B;
+  --color-muted: #6B625B;
+  --color-ligne: #E8E1DA;
+  --color-succes: #1BAF7A;
+  --color-alerte: #C2410C;
+  --color-danger: #B42318;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --shadow-carte: 0 1px 2px rgba(54, 35, 22, 0.06), 0 1px 8px rgba(54, 35, 22, 0.05);
+  --animate-apparition: apparition 180ms ease-out;
+}
+
+@keyframes apparition {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+html, body, #root { height: 100%; }
+body { background: var(--color-gris); color: var(--color-texte); font-family: var(--font-sans); }
+
+/* Boutons : déclarés en @utility (Tailwind 4) pour pouvoir être composés et combinés à des variantes */
+@utility btn { @apply inline-flex items-center justify-center gap-2 rounded-md px-3.5 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-beige; }
+@utility btn-principal { @apply btn bg-brun text-white hover:bg-brun-clair; }
+@utility btn-accent { @apply btn bg-beige text-profond hover:bg-[#d8ac89]; } /* texte marron sur beige : contraste 5,9:1 */
+@utility btn-secondaire { @apply btn border border-ligne bg-white text-texte hover:bg-gris; }
+@utility btn-danger { @apply btn bg-danger text-white hover:bg-[#912018]; }
+@utility btn-lien { @apply text-sm font-medium text-brun underline-offset-2 hover:underline; }
+
+@layer components {
+  .carte { @apply rounded-lg bg-white shadow-carte border border-ligne/70; }
+  .champ { @apply w-full rounded-md border border-ligne bg-white px-3 py-2 text-sm text-texte placeholder:text-muted/70 focus:border-beige focus:outline-none focus:ring-2 focus:ring-beige/40 disabled:bg-gris; }
+  .etiquette { @apply mb-1 block text-xs font-medium text-muted; }
+  .titre-page { @apply text-xl font-semibold text-profond sm:text-2xl; }
+  .tableau { @apply w-full text-left text-sm; }
+  .tableau th { @apply whitespace-nowrap border-b border-ligne bg-gris/70 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted; }
+  .tableau td { @apply border-b border-ligne/70 px-3 py-2.5 align-middle; }
+  .tableau tbody tr { @apply transition-colors hover:bg-beige-pale/50; }
+}

@@ -1,0 +1,16 @@
+# Secrets
+.env
+*.env.local
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+# Node / build
+node_modules/
+frontend/dist/
+# Base et outils locaux (PostgreSQL portable)
+.pgdata/
+.outils/
+*.dump
+*.tsbuildinfo

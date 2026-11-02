@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 150" role="img" aria-label="CIAT VISION – Le pilotage intelligent de l'innovation par la donnée">
+  <!-- Logo PROVISOIRE (fond clair) : remplacer par la version « page de connexion » du logo officiel CIAT VISION -->
+  <rect x="118" y="0" width="64" height="64" rx="14" fill="#4C311F"/>
+  <rect x="131" y="34" width="9" height="18" rx="2" fill="#CA9871"/>
+  <rect x="145.5" y="25" width="9" height="27" rx="2" fill="#CA9871"/>
+  <rect x="160" y="14" width="9" height="38" rx="2" fill="#CA9871"/>
+  <text x="150" y="108" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="34" font-weight="700" fill="#362316">CIAT <tspan font-weight="500" fill="#A8774F">VISION</tspan></text>
+  <text x="150" y="136" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="12.5" fill="#6B625B">Le pilotage intelligent de l'innovation par la donnée</text>
+</svg>
