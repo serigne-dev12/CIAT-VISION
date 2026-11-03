@@ -24,9 +24,10 @@ simulées. Elles garantissent que ce qui est présenté au jury correspond exact
 
 ## 2. Logo
 
-Le **logo officiel CIAT VISION** fourni par le réalisateur est utilisé sans aucune déformation ni recoloration :
-les trois versions sont de simples recadrages de l'original (`docs/logo/ciat_vision_logo_original.png`), avec
-proportions conservées.
+Le **logo officiel CIAT VISION** fourni par le réalisateur est utilisé sans aucune déformation ni recoloration.
+Son fond blanc a été rendu **transparent** (bords adoucis conservés, sans liseré) ; les trois versions sont de simples
+recadrages, proportions conservées. Original : `docs/logo/ciat_vision_logo_original.png` ; version transparente :
+`docs/logo/ciat_vision_logo_transparent.png` ; préparation reproductible : `scripts/preparer_logo.py`.
 
 | Version | Fichier | Usage |
 |---|---|---|
@@ -35,8 +36,9 @@ proportions conservées.
 | Complète (avec « ISEP AMADOU TRAWARÉ ») | `frontend/public/logo/logo-complet.png` | Formulaire de connexion |
 | PDF | `backend/app/assets/logo.png` | En-tête de tous les rapports PDF |
 
-Le logo étant conçu sur fond clair (texte marron foncé), il est posé sur un **cartouche blanc à coins arrondis**
-lorsqu'il apparaît sur la barre latérale marron ou sur l'en-tête marron des PDF, pour rester lisible.
+Le logo étant conçu pour un fond clair (texte « CIAT » marron foncé), il est toujours posé sur une **surface
+claire** : la zone du logo en haut de la barre latérale est blanche et prolonge la barre supérieure, et l'en-tête des
+rapports PDF est blanc, souligné de deux filets marron et beige.
 
 ## 3. Écrans
 

@@ -344,17 +344,17 @@ def render_pdf(r: Report) -> bytes:
 
     def page(canvas, _doc):
         canvas.saveState()
-        canvas.setFillColor(BRUN)
-        canvas.rect(0, A4[1] - 20 * mm, A4[0], 20 * mm, stroke=0, fill=1)
+        # En-tête blanc : le logo officiel (fond transparent, conçu pour un fond clair) s'y pose directement
         if LOGO_FILE.exists():
-            # Logo officiel (fond clair) posé sur un cartouche blanc, proportions conservées
-            canvas.setFillColor(colors.white)
-            canvas.roundRect(13 * mm, A4[1] - 18.5 * mm, 42 * mm, 17 * mm, 2 * mm, stroke=0, fill=1)
-            canvas.drawImage(str(LOGO_FILE), 14.5 * mm, A4[1] - 17.5 * mm, width=39 * mm, height=15 * mm,
-                             preserveAspectRatio=True, anchor="c", mask="auto")
+            canvas.drawImage(str(LOGO_FILE), 15 * mm, A4[1] - 19 * mm, width=42 * mm, height=16 * mm,
+                             preserveAspectRatio=True, anchor="w", mask="auto")
         else:
-            draw_logo(180, 36, on_dark=True).drawOn(canvas, 16 * mm, A4[1] - 16.5 * mm)
-        canvas.setFillColor(colors.white)
+            draw_logo(180, 36).drawOn(canvas, 16 * mm, A4[1] - 16.5 * mm)
+        canvas.setFillColor(BRUN)
+        canvas.rect(0, A4[1] - 21.5 * mm, A4[0], 1.2 * mm, stroke=0, fill=1)   # filet marron
+        canvas.setFillColor(BEIGE)
+        canvas.rect(0, A4[1] - 22.3 * mm, A4[0], 0.8 * mm, stroke=0, fill=1)   # filet beige
+        canvas.setFillColor(BRUN_PROFOND)
         canvas.setFont("Helvetica", 8.5)
         canvas.drawRightString(A4[0] - 16 * mm, A4[1] - 9 * mm, _safe(r.institution))
         canvas.drawRightString(A4[0] - 16 * mm, A4[1] - 13.5 * mm, "Centre d'Innovation, d'Application et de Transfert")

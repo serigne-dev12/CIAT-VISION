@@ -127,8 +127,9 @@ pg_restore --clean --if-exists --dbname="$DATABASE_URL" ciat_vision_AAAA-MM-JJ.d
 ## 8. Logo
 
 Le logo officiel est intégré (versions décrites dans `docs/04_maquettes.md` § 2). Pour le changer plus tard,
-remplacer les fichiers de `frontend/public/logo/` et `backend/app/assets/logo.png` en gardant les mêmes noms,
-puis reconstruire le frontend (`npm run build`). Aucune modification du code n'est nécessaire.
+remplacer `docs/logo/ciat_vision_logo_original.png`, lancer `python scripts/preparer_logo.py` (fond rendu
+transparent et versions recadrées automatiquement ; ajuster les zones de recadrage du script si la mise en page du
+nouveau logo diffère), puis reconstruire le frontend (`npm run build`). Aucune modification du code n'est nécessaire.
 
 ## 9. Sécurité en production – liste de contrôle
 

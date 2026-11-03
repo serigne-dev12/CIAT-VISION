@@ -50,10 +50,11 @@ export default function Layout() {
     <div className="flex min-h-full">
       {/* Barre latérale (ordinateur) */}
       <aside className={`sticky top-0 hidden h-screen shrink-0 flex-col bg-brun transition-[width] duration-200 lg:flex ${replie ? "w-[72px]" : "w-64"}`}>
-        {/* Logo officiel sur cartouche blanc : conçu sur fond clair, il n'est jamais recoloré ni déformé */}
-        <Link to="/" className={`flex h-16 items-center border-b border-white/10 ${replie ? "justify-center px-2" : "px-3"}`} aria-label="CIAT VISION – accueil">
-          {replie ? <img src="/logo/logo-compact.png" alt="CIAT VISION" className="size-11 rounded-md bg-white object-contain p-0.5" />
-            : <span className="flex h-12 w-full items-center justify-center rounded-md bg-white px-2"><img src="/logo/logo-horizontal.png" alt="CIAT VISION" className="h-11 w-auto object-contain" /></span>}
+        {/* Logo officiel (fond transparent) sur la zone claire qui prolonge la barre supérieure :
+            conçu pour un fond clair, il n'est jamais recoloré ni déformé */}
+        <Link to="/" className={`flex h-16 items-center justify-center border-b border-r border-ligne bg-white ${replie ? "px-1" : "px-3"}`} aria-label="CIAT VISION – accueil">
+          {replie ? <img src="/logo/logo-compact.png" alt="CIAT VISION" className="size-12 object-contain" />
+            : <img src="/logo/logo-horizontal.png" alt="CIAT VISION" className="h-12 w-auto object-contain" />}
         </Link>
         {nav(replie)}
         <button onClick={() => setReplie(!replie)} className="m-2 flex items-center justify-center gap-2 rounded-md px-3 py-2 text-xs text-white/70 hover:bg-white/5"
@@ -67,9 +68,9 @@ export default function Layout() {
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-profond/50" onClick={() => setMobile(false)} />
           <aside className="animate-apparition absolute inset-y-0 left-0 flex w-72 flex-col bg-brun">
-            <div className="flex h-20 items-center justify-between border-b border-white/10 px-4">
-              <span className="flex h-12 items-center rounded-md bg-white px-2"><img src="/logo/logo-horizontal.png" alt="CIAT VISION" className="h-10 w-auto object-contain" /></span>
-              <button onClick={() => setMobile(false)} className="rounded p-1 text-white" aria-label="Fermer le menu"><X className="size-5" /></button>
+            <div className="flex h-16 items-center justify-between border-b border-ligne bg-white px-4">
+              <img src="/logo/logo-horizontal.png" alt="CIAT VISION" className="h-11 w-auto object-contain" />
+              <button onClick={() => setMobile(false)} className="rounded p-1 text-profond hover:bg-gris" aria-label="Fermer le menu"><X className="size-5" /></button>
             </div>
             {nav(false)}
           </aside>

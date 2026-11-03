@@ -26,7 +26,7 @@ export default function LoginPage() {
   return (
     <div className="grid min-h-full lg:grid-cols-2">
       <div className="relative hidden flex-col justify-between overflow-hidden bg-brun p-10 text-white lg:flex">
-        <span className="flex w-fit items-center rounded-lg bg-white px-3 py-2"><img src="/logo/logo-horizontal.png" alt="CIAT VISION" className="h-14 w-auto object-contain" /></span>
+        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-beige">Centre d'Innovation, d'Application et de Transfert</p>
         <div className="max-w-md">
           <h1 className="text-3xl font-semibold leading-tight">Le pilotage intelligent de l'innovation par la donnée.</h1>
           <p className="mt-4 text-white/80">Suivez les candidatures, les projets incubés, les cohortes et les financements du

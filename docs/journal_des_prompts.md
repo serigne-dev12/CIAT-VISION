@@ -119,3 +119,22 @@ d'un dépôt se fait avec le compte du réalisateur), déploiement Render, clé 
 - Logo officiel intégré sans déformation : versions horizontale, compacte et complète obtenues par recadrage de
   l'original ; posé sur un cartouche blanc sur les fonds marron (barre latérale, en-tête des PDF) ; icône d'onglet ;
   couverture des PDF des livrables. Maquettes recapturées.
+
+---
+
+## Entrée 5 – Logo sans fond
+
+**Date :** 03/11/2026
+**Outil :** Claude Code (Claude Opus 5.5)
+
+**Prompt :** « le travail est bon mais on va améliorer le logo : enlève le background ».
+
+**Résultat obtenu :** fond blanc du logo rendu transparent (seul le fond relié aux bords ; les blancs intérieurs du
+dessin, comme le verre de la loupe, sont conservés ; bords adoucis sans liseré). Script reproductible
+`scripts/preparer_logo.py`. Les cadres blancs ont été supprimés : le logo est posé directement sur une zone claire
+(haut de la barre latérale, menu mobile, page de connexion, en-tête blanc des rapports PDF).
+
+**Correction en cours de route :** la première exécution du script ne rendait aucun pixel transparent ; cause :
+avec cette version de Pillow, une image créée par `Image.fromarray` partage la mémoire du tableau et le remplissage
+(`floodfill`) ne la modifiait pas. Corrigé par une copie (`.copy()`), puis seuil ajusté (fond de l'original à
+253-254 et non 255) : 80 % des pixels deviennent transparents, 0,4 % semi-transparents (contours).
