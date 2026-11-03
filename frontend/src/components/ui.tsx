@@ -37,7 +37,8 @@ export function Card({ title, actions, children, className = "", subtitle }:
     <section className={`carte animate-apparition ${className}`}>
       {(title || actions) && (
         <header className="flex flex-wrap items-start justify-between gap-2 border-b border-ligne/70 px-4 py-3">
-          <div>
+          {/* Le titre se replie sur lui-même plutôt que de rejeter les actions à la ligne (titres longs) */}
+          <div className="min-w-0 flex-[1_1_12rem]">
             {title && <h2 className="text-sm font-semibold text-profond">{title}</h2>}
             {subtitle && <p className="text-xs text-muted">{subtitle}</p>}
           </div>
@@ -159,5 +160,28 @@ export function ConfirmDialog({ open, title, message, confirmLabel = "Confirmer"
       </>}>
       <div className="text-sm text-texte">{message}</div>
     </Modal>
+  );
+}
+
+// ------------------------------------------------------------------ infobulle (définitions, formules)
+/** Infobulle accessible : survol, focus clavier ou appui (téléphone). */
+export function InfoTip({ text, label = "Définition" }: { text: string; label?: string }) {
+  const [ouvert, setOuvert] = useState(false);
+  return (
+    <span className="relative inline-flex" onMouseEnter={() => setOuvert(true)} onMouseLeave={() => setOuvert(false)}>
+      <button type="button" className="rounded-full text-beige-fonce hover:text-brun focus-visible:outline-2 focus-visible:outline-beige"
+        aria-label={`${label} : ${text}`} aria-expanded={ouvert}
+        // Le clic OUVRE (sans basculer) : sinon survol/focus puis clic refermeraient aussitôt l'infobulle (téléphone)
+        onClick={(e) => { e.stopPropagation(); setOuvert(true); }}
+        onKeyDown={(e) => { if (e.key === "Escape") setOuvert(false); }}
+        onFocus={() => setOuvert(true)} onBlur={() => setOuvert(false)}>
+        <Info className="size-3.5" aria-hidden />
+      </button>
+      {ouvert && (
+        <span role="tooltip" className="animate-apparition absolute left-1/2 top-full z-40 mt-1.5 w-64 -translate-x-1/2 rounded-md bg-profond px-3 py-2 text-left text-xs font-normal normal-case leading-snug tracking-normal text-white shadow-lg">
+          {text}
+        </span>
+      )}
+    </span>
   );
 }

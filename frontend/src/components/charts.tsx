@@ -10,6 +10,9 @@ import { AXE, BEIGE, BRUN, GRILLE, SERIES, STATUT_COULEURS } from "../lib/colors
 import { fmtFCFA, fmtMillions, fmtMois, fmtNombre } from "../lib/format";
 import { Empty } from "./ui";
 
+/** Animations discrètes, désactivées si l'utilisateur a demandé à réduire les animations (accessibilité). */
+const ANIMER = typeof window === "undefined" || !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
 const axe = { tick: { fill: AXE, fontSize: 11 }, axisLine: { stroke: GRILLE }, tickLine: false } as const;
 const tooltipStyle = { contentStyle: { borderRadius: 8, borderColor: "#E8E1DA", fontSize: 12 }, cursor: { fill: "rgba(202,152,113,0.12)" } };
 
@@ -29,7 +32,7 @@ export function HBars({ data, labelKey, valueKey, unit = "projets", money = fals
         <XAxis type="number" {...axe} tickFormatter={money ? fmtMillions : fmtNombre} />
         <YAxis type="category" dataKey={labelKey} {...axe} width={150} tick={{ fill: "#2B211B", fontSize: 11 }} />
         <Tooltip {...tooltipStyle} formatter={(v) => [money ? fmtFCFA(Number(v)) : `${fmtNombre(Number(v))} ${unit}`, ""]} separator="" />
-        <Bar dataKey={valueKey} fill={BRUN} radius={[0, 4, 4, 0]} maxBarSize={22}
+        <Bar isAnimationActive={ANIMER} dataKey={valueKey} fill={BRUN} radius={[0, 4, 4, 0]} maxBarSize={22}
           label={{ position: "right", fill: "#2B211B", fontSize: 11, formatter: (v: unknown) => (money ? fmtMillions(Number(v)) : fmtNombre(Number(v))) }} />
       </BarChart>
     </ResponsiveContainer>
@@ -44,7 +47,7 @@ export function StatusDonut({ data }: { data: Charts["by_status"] }) {
     <div className="grid items-center gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <ResponsiveContainer width="100%" height={240}>
         <PieChart>
-          <Pie data={data} dataKey="count" nameKey="status" innerRadius="58%" outerRadius="90%" paddingAngle={1.5} stroke="#fff" strokeWidth={2}>
+          <Pie isAnimationActive={ANIMER} data={data} dataKey="count" nameKey="status" innerRadius="58%" outerRadius="90%" paddingAngle={1.5} stroke="#fff" strokeWidth={2}>
             {data.map((d) => <Cell key={d.status} fill={STATUT_COULEURS[d.status] ?? AXE} />)}
           </Pie>
           <Tooltip {...tooltipStyle} formatter={(v, n) => [`${fmtNombre(Number(v))} (${Math.round((Number(v) / total) * 100)} %)`, String(n)]} />
@@ -76,9 +79,9 @@ export function ApplicationsLine({ data }: { data: Charts["applications_monthly"
         <YAxis {...axe} allowDecimals={false} />
         <Tooltip {...tooltipStyle} labelFormatter={(m) => fmtMois(String(m))} />
         <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-        <Line type="monotone" dataKey="received" name="Reçues" stroke={BRUN} strokeWidth={2} dot={{ r: 3 }} />
-        <Line type="monotone" dataKey="accepted" name="Acceptées" stroke={SERIES[3]} strokeWidth={2} dot={{ r: 3 }} />
-        <Line type="monotone" dataKey="rejected" name="Rejetées" stroke={SERIES[1]} strokeWidth={2} dot={{ r: 3 }} strokeDasharray="4 3" />
+        <Line isAnimationActive={ANIMER} type="monotone" dataKey="received" name="Reçues" stroke={BRUN} strokeWidth={2} dot={{ r: 3 }} />
+        <Line isAnimationActive={ANIMER} type="monotone" dataKey="accepted" name="Acceptées" stroke={SERIES[3]} strokeWidth={2} dot={{ r: 3 }} />
+        <Line isAnimationActive={ANIMER} type="monotone" dataKey="rejected" name="Rejetées" stroke={SERIES[1]} strokeWidth={2} dot={{ r: 3 }} strokeDasharray="4 3" />
       </LineChart>
     </ResponsiveContainer>
   );
@@ -95,10 +98,10 @@ export function CohortsBars({ data }: { data: CohortStats[] }) {
         <YAxis {...axe} allowDecimals={false} />
         <Tooltip {...tooltipStyle} />
         <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-        <Bar dataKey="applications" name="Candidatures" fill={SERIES[1]} radius={[4, 4, 0, 0]} maxBarSize={28} />
-        <Bar dataKey="selected" name="Sélectionnés" fill={SERIES[0]} radius={[4, 4, 0, 0]} maxBarSize={28} />
-        <Bar dataKey="completed" name="Terminés" fill={SERIES[3]} radius={[4, 4, 0, 0]} maxBarSize={28} />
-        <Bar dataKey="delayed" name="En retard" fill="#E34948" radius={[4, 4, 0, 0]} maxBarSize={28} />
+        <Bar isAnimationActive={ANIMER} dataKey="applications" name="Candidatures" fill={SERIES[1]} radius={[4, 4, 0, 0]} maxBarSize={28} />
+        <Bar isAnimationActive={ANIMER} dataKey="selected" name="Sélectionnés" fill={SERIES[0]} radius={[4, 4, 0, 0]} maxBarSize={28} />
+        <Bar isAnimationActive={ANIMER} dataKey="completed" name="Terminés" fill={SERIES[3]} radius={[4, 4, 0, 0]} maxBarSize={28} />
+        <Bar isAnimationActive={ANIMER} dataKey="delayed" name="En retard" fill="#E34948" radius={[4, 4, 0, 0]} maxBarSize={28} />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -121,9 +124,9 @@ export function RatesLine({ data }: { data: CohortStats[] }) {
         <YAxis {...axe} unit=" %" domain={[0, 100]} />
         <Tooltip {...tooltipStyle} formatter={(v) => (v === null ? "non calculable" : `${String(v).replace(".", ",")} %`)} />
         <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-        <Line dataKey="selection" name="Taux de sélection" stroke={SERIES[0]} strokeWidth={2} connectNulls={false} />
-        <Line dataKey="achevement" name="Taux d'achèvement" stroke={SERIES[3]} strokeWidth={2} connectNulls={false} />
-        <Line dataKey="retard" name="Taux de retard" stroke="#E34948" strokeWidth={2} strokeDasharray="4 3" connectNulls={false} />
+        <Line isAnimationActive={ANIMER} dataKey="selection" name="Taux de sélection" stroke={SERIES[0]} strokeWidth={2} connectNulls={false} />
+        <Line isAnimationActive={ANIMER} dataKey="achevement" name="Taux d'achèvement" stroke={SERIES[3]} strokeWidth={2} connectNulls={false} />
+        <Line isAnimationActive={ANIMER} dataKey="retard" name="Taux de retard" stroke="#E34948" strokeWidth={2} strokeDasharray="4 3" connectNulls={false} />
       </LineChart>
     </ResponsiveContainer>
   );
@@ -140,9 +143,9 @@ export function FundingArea({ data }: { data: Charts["fundings_monthly"] }) {
         <YAxis {...axe} tickFormatter={fmtMillions} width={56} />
         <Tooltip {...tooltipStyle} labelFormatter={(m) => fmtMois(String(m))} formatter={(v, n) => [fmtFCFA(Number(v)), String(n)]} />
         <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-        <Area type="monotone" dataKey="requested" name="Demandé" stroke={AXE} fill={AXE} fillOpacity={0.08} strokeDasharray="4 3" />
-        <Area type="monotone" dataKey="granted" name="Accordé" stroke={BEIGE} fill={BEIGE} fillOpacity={0.25} />
-        <Area type="monotone" dataKey="received" name="Reçu" stroke={BRUN} fill={BRUN} fillOpacity={0.25} />
+        <Area isAnimationActive={ANIMER} type="monotone" dataKey="requested" name="Demandé" stroke={AXE} fill={AXE} fillOpacity={0.08} strokeDasharray="4 3" />
+        <Area isAnimationActive={ANIMER} type="monotone" dataKey="granted" name="Accordé" stroke={BEIGE} fill={BEIGE} fillOpacity={0.25} />
+        <Area isAnimationActive={ANIMER} type="monotone" dataKey="received" name="Reçu" stroke={BRUN} fill={BRUN} fillOpacity={0.25} />
       </AreaChart>
     </ResponsiveContainer>
   );
@@ -158,7 +161,69 @@ export function ProgressBars({ data }: { data: Charts["progress_distribution"] }
         <XAxis dataKey="range" {...axe} />
         <YAxis {...axe} allowDecimals={false} />
         <Tooltip {...tooltipStyle} formatter={(v) => [`${v} projets actifs`, ""]} separator="" />
-        <Bar dataKey="count" fill={BRUN} radius={[4, 4, 0, 0]} maxBarSize={56} label={{ position: "top", fill: "#2B211B", fontSize: 11 }} />
+        <Bar isAnimationActive={ANIMER} dataKey="count" fill={BRUN} radius={[4, 4, 0, 0]} maxBarSize={56} label={{ position: "top", fill: "#2B211B", fontSize: 11 }} />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+// ------------------------------------------------------------------ V2
+/** Évolution des projets par mois de dépôt (projets, sélectionnés, terminés). */
+export function ProjectsMonthlyLine({ data }: { data: { month: string; projects: number; selected: number; completed: number }[] }) {
+  if (vide(data.length)) return vide(0);
+  return (
+    <ResponsiveContainer width="100%" height={280}>
+      <LineChart data={data} margin={{ left: -10, right: 12, top: 8 }}>
+        <CartesianGrid vertical={false} stroke={GRILLE} />
+        <XAxis dataKey="month" {...axe} tickFormatter={fmtMois} minTickGap={12} />
+        <YAxis {...axe} allowDecimals={false} />
+        <Tooltip {...tooltipStyle} labelFormatter={(m) => fmtMois(String(m))} />
+        <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+        <Line isAnimationActive={ANIMER} type="monotone" dataKey="projects" name="Projets" stroke={BRUN} strokeWidth={2} dot={{ r: 3 }} />
+        <Line isAnimationActive={ANIMER} type="monotone" dataKey="selected" name="Sélectionnés" stroke={SERIES[1]} strokeWidth={2} dot={{ r: 3 }} />
+        <Line isAnimationActive={ANIMER} type="monotone" dataKey="completed" name="Terminés" stroke={SERIES[3]} strokeWidth={2} dot={{ r: 3 }} />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
+/** Comparaison des performances par domaine : taux d'achèvement, taux de retard, progression moyenne (en %). */
+export function DomainPerformance({ data }: { data: { domain: string; completion_rate: number | null; delay_rate: number | null; avg_progress: number | null }[] }) {
+  if (vide(data.length)) return vide(0);
+  const rows = data.map((d) => ({
+    domaine: d.domain,
+    achevement: d.completion_rate === null ? null : Math.round(d.completion_rate * 1000) / 10,
+    retard: d.delay_rate === null ? null : Math.round(d.delay_rate * 1000) / 10,
+    progression: d.avg_progress,
+  }));
+  return (
+    <ResponsiveContainer width="100%" height={Math.max(300, rows.length * 46 + 60)}>
+      <BarChart data={rows} layout="vertical" margin={{ left: 8, right: 24, top: 4 }} barGap={2}>
+        <CartesianGrid horizontal={false} stroke={GRILLE} />
+        <XAxis type="number" {...axe} domain={[0, 100]} unit=" %" />
+        <YAxis type="category" dataKey="domaine" {...axe} width={150} tick={{ fill: "#2B211B", fontSize: 11 }} />
+        <Tooltip {...tooltipStyle} formatter={(v) => (v === null ? "non calculable" : `${String(v).replace(".", ",")} %`)} />
+        <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+        <Bar isAnimationActive={ANIMER} dataKey="achevement" name="Taux d'achèvement" fill={SERIES[3]} radius={[0, 3, 3, 0]} maxBarSize={10} />
+        <Bar isAnimationActive={ANIMER} dataKey="progression" name="Progression moyenne" fill={BRUN} radius={[0, 3, 3, 0]} maxBarSize={10} />
+        <Bar isAnimationActive={ANIMER} dataKey="retard" name="Taux de retard" fill="#E34948" radius={[0, 3, 3, 0]} maxBarSize={10} />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+/** Barres groupées génériques : une série par élément comparé, une catégorie par indicateur (valeurs en %). */
+export function CompareBars({ rows, series }: { rows: Record<string, string | number | null>[]; series: string[] }) {
+  if (vide(rows.length)) return vide(0);
+  return (
+    <ResponsiveContainer width="100%" height={300}>
+      <BarChart data={rows} margin={{ left: -10, right: 8, top: 8 }} barGap={3}>
+        <CartesianGrid vertical={false} stroke={GRILLE} />
+        <XAxis dataKey="indicateur" {...axe} interval={0} tick={{ fill: AXE, fontSize: 11 }} />
+        <YAxis {...axe} unit=" %" domain={[0, 100]} />
+        <Tooltip {...tooltipStyle} formatter={(v) => (v === null ? "non calculable" : `${String(v).replace(".", ",")} %`)} />
+        <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+        {series.map((s, i) => <Bar isAnimationActive={ANIMER} key={s} dataKey={s} name={s} fill={SERIES[i % SERIES.length]} radius={[4, 4, 0, 0]} maxBarSize={36} />)}
       </BarChart>
     </ResponsiveContainer>
   );

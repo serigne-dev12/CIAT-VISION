@@ -3,7 +3,7 @@ import { Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
-import type { Charts, Funding, Kpi } from "../api/types";
+import type { Charts, Funding, Kpi, Partner } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { FundingArea, HBars } from "../components/charts";
 import { useData } from "../components/DataContext";
@@ -27,14 +27,24 @@ export default function FundingsPage() {
   const [q, setQ] = useState("");
   const [source, setSource] = useState("");
   const [statut, setStatut] = useState("");
+  const [partenaire, setPartenaire] = useState("");
+  const [du, setDu] = useState("");
+  const [au, setAu] = useState("");
+  const [mMin, setMMin] = useState("");
+  const [mMax, setMMax] = useState("");
+  const dMin = useDebounced(mMin);
+  const dMax = useDebounced(mMax);
+  const partenaires = useApi(() => api.get<Partner[]>("/partners"), []);
+  const specifiques = { partner_id: partenaire || undefined, request_start: du || undefined, request_end: au || undefined,
+    amount_min: dMin || undefined, amount_max: dMax || undefined };
   const [page, setPage] = useState(1);
   const [form, setForm] = useState<Funding | "new" | null>(null);
   const [suppr, setSuppr] = useState<Funding | null>(null);
   const dq = useDebounced(q);
   const key = JSON.stringify(params);
-  useEffect(() => { setPage(1); }, [dq, source, statut, key]);
-  const r = useApi(() => api.get<Reponse>("/fundings", { ...params, q: dq, source, funding_status: statut, page, page_size: 15 }),
-    [key, dq, source, statut, page]);
+  useEffect(() => { setPage(1); }, [dq, source, statut, key, JSON.stringify(specifiques)]);
+  const r = useApi(() => api.get<Reponse>("/fundings", { ...params, ...specifiques, q: dq, source, funding_status: statut, page, page_size: 15 }),
+    [key, dq, source, statut, page, JSON.stringify(specifiques)]);
 
   return (
     <div className="space-y-5">
@@ -64,6 +74,20 @@ export default function FundingsPage() {
               <select className="champ !w-auto" value={statut} onChange={(e) => setStatut(e.target.value)} aria-label="Statut du financement">
                 <option value="">Tous les statuts</option>{["Demandé", "Accordé", "Partiellement reçu", "Reçu", "Refusé"].map((s) => <option key={s}>{s}</option>)}
               </select>
+              <select className="champ !w-auto max-w-[220px]" value={partenaire} onChange={(e) => setPartenaire(e.target.value)} aria-label="Partenaire">
+                <option value="">Tous les partenaires</option>{(partenaires.data ?? []).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+              </select>
+            </div>
+            <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-xs text-muted">Demandes du</span>
+              <input type="date" className="champ !w-auto" value={du} onChange={(e) => setDu(e.target.value)} aria-label="Demandes à partir du" />
+              <span className="text-xs text-muted">au</span>
+              <input type="date" className="champ !w-auto" value={au} onChange={(e) => setAu(e.target.value)} aria-label="Demandes jusqu'au" />
+              <span className="ml-2 text-xs text-muted">Montant demandé</span>
+              <input className="champ !w-32" inputMode="numeric" placeholder="min (FCFA)" value={mMin} onChange={(e) => setMMin(e.target.value.replace(/\D/g, ""))} aria-label="Montant minimum" />
+              <span className="text-muted">–</span>
+              <input className="champ !w-32" inputMode="numeric" placeholder="max (FCFA)" value={mMax} onChange={(e) => setMMax(e.target.value.replace(/\D/g, ""))} aria-label="Montant maximum" />
+              {(partenaire || du || au || mMin || mMax) && <button className="btn-lien" onClick={() => { setPartenaire(""); setDu(""); setAu(""); setMMin(""); setMMax(""); }}>Effacer</button>}
             </div>
             {r.data.items.length === 0 ? <Empty title="Aucun financement" /> : (
               <div className="-mx-4 overflow-x-auto">

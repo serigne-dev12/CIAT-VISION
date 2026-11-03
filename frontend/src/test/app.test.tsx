@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider } from "../auth/AuthContext";
 import KpiCard from "../components/KpiCard";
 import { Pagination, StatusBadge } from "../components/ui";
+import { EMPTY_FILTERS, filtersToBody, filtersToParams, periodBounds } from "../components/DataContext";
 import { fmtFCFA, fmtKpi, fmtTaux, peut } from "../lib/format";
 import LoginPage from "../pages/LoginPage";
 
@@ -32,10 +33,13 @@ describe("matrice des droits (affichage)", () => {
 });
 
 describe("composants", () => {
-  it("la carte KPI affiche la valeur calculée et sa définition", () => {
+  it("la carte KPI affiche la valeur calculée et sa définition dans une infobulle", async () => {
     render(<KpiCard kpi={{ key: "selection_rate", label: "Taux de sélection", unit: "rate", value: 0.5, definition: "Acceptées ÷ décidées." }} />);
     expect(screen.getByText("50,0 %")).toBeInTheDocument();
-    expect(screen.getByText("Acceptées ÷ décidées.")).toBeInTheDocument();
+    const bouton = screen.getByRole("button", { name: /Acceptées ÷ décidées/ });  // définition accessible aux lecteurs d'écran
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    await userEvent.click(bouton);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Acceptées ÷ décidées.");
   });
 
   it("la pastille de statut affiche le libellé", () => {
@@ -82,5 +86,30 @@ describe("connexion", () => {
     await userEvent.type(screen.getByLabelText("Mot de passe"), "Admin@2026");
     await userEvent.click(screen.getByRole("button", { name: /se connecter/i }));
     await waitFor(() => expect(sessionStorage.getItem("ciat_vision_token")).toBe("jeton-test"));
+  });
+});
+
+describe("filtres V2", () => {
+  it("calcule les périodes prédéfinies", () => {
+    const sept = periodBounds("7d", { start: "", end: "" });
+    const jours = (new Date(sept.end).getTime() - new Date(sept.start).getTime()) / 86400000;
+    expect(jours).toBe(6);  // 7 jours, aujourd'hui inclus
+    const an = new Date().getFullYear();
+    expect(periodBounds("year", { start: "", end: "" })).toEqual({ start: `${an}-01-01`, end: `${an}-12-31` });
+    expect(periodBounds("custom", { start: "2025-02-01", end: "2025-03-01" })).toEqual({ start: "2025-02-01", end: "2025-03-01" });
+    expect(periodBounds("", { start: "x", end: "y" })).toEqual({ start: "", end: "" });
+  });
+
+  it("convertit les filtres en paramètres de l'API (GET et JSON)", () => {
+    const f = { ...EMPTY_FILTERS, period: "custom" as const, start_date: "2025-01-01", end_date: "2025-06-30", cohort_id: "3",
+      responsible_id: "2", performance: "Faible", funding_level: "Non financé" };
+    expect(filtersToParams(f)).toEqual({ start_date: "2025-01-01", end_date: "2025-06-30", cohort_id: "3", responsible_id: "2",
+      performance: "Faible", funding_level: "Non financé" });
+    const b = filtersToBody(f);
+    expect(b.cohort_ids).toEqual([3]);
+    expect(b.responsible_ids).toEqual([2]);
+    expect(b.performance_levels).toEqual(["Faible"]);
+    expect(b.domain_ids).toEqual([]);
+    expect(filtersToParams(EMPTY_FILTERS)).toEqual({});
   });
 });

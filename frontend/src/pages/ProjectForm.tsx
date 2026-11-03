@@ -9,11 +9,11 @@ import { errMsg, useDebounced } from "../lib/hooks";
 
 interface Props { open: boolean; onClose: () => void; onSaved: (p: ProjectDetail) => void; project?: ProjectDetail | null }
 
-const VIDE = { name: "", description: "", domain_id: "", cohort_id: "", planned_budget: "", deadline: "", submitted_at: todayISO() };
+const VIDE = { name: "", description: "", domain_id: "", cohort_id: "", planned_budget: "", deadline: "", submitted_at: todayISO(), responsible_id: "" };
 const PORTEUR = { first_name: "", last_name: "", gender: "", email: "", phone: "", profile: "Étudiant ISEP" };
 
 export default function ProjectForm({ open, onClose, onSaved, project }: Props) {
-  const { domains, cohorts } = useData();
+  const { domains, cohorts, responsables } = useData();
   const toast = useToast();
   const [f, setF] = useState(VIDE);
   const [porteur, setPorteur] = useState(PORTEUR);
@@ -31,7 +31,7 @@ export default function ProjectForm({ open, onClose, onSaved, project }: Props) 
     if (project) {
       setF({ name: project.name, description: project.description ?? "", domain_id: String(project.domain.id),
         cohort_id: String(project.cohort.id), planned_budget: String(project.planned_budget), deadline: project.deadline ?? "",
-        submitted_at: project.application.submitted_at });
+        submitted_at: project.application.submitted_at, responsible_id: project.responsible ? String(project.responsible.id) : "" });
     } else { setF(VIDE); setPorteur(PORTEUR); setPorteurId(null); setRecherche(""); setModePorteur("nouveau"); }
   }, [open, project]);
 
@@ -65,7 +65,8 @@ export default function ProjectForm({ open, onClose, onSaved, project }: Props) 
     if (!valider()) return;
     setEnvoi(true);
     const commun = { name: f.name.trim(), description: f.description.trim() || null, domain_id: Number(f.domain_id),
-      cohort_id: Number(f.cohort_id), planned_budget: Number(f.planned_budget || 0), deadline: f.deadline || null };
+      cohort_id: Number(f.cohort_id), planned_budget: Number(f.planned_budget || 0), deadline: f.deadline || null,
+      responsible_id: f.responsible_id ? Number(f.responsible_id) : null };
     try {
       const res = project
         ? await api.put<ProjectDetail>(`/projects/${project.id}`, commun)
@@ -99,6 +100,10 @@ export default function ProjectForm({ open, onClose, onSaved, project }: Props) 
         <Field label="Cohorte *" htmlFor="p-coh" error={erreurs.cohort_id}>
           <select id="p-coh" className="champ" value={f.cohort_id} onChange={set("cohort_id")}>
             <option value="">Choisir…</option>{cohorts.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select></Field>
+        <Field label="Responsable de suivi (CIAT)" htmlFor="p-resp">
+          <select id="p-resp" className="champ" value={f.responsible_id} onChange={set("responsible_id")}>
+            <option value="">Non attribué</option>{responsables.filter((r) => r.is_active).map((r) => <option key={r.id} value={r.id}>{r.full_name}</option>)}
           </select></Field>
         <Field label="Budget prévisionnel (FCFA)" htmlFor="p-bud" error={erreurs.planned_budget}>
           <input id="p-bud" className="champ" inputMode="numeric" value={f.planned_budget} onChange={set("planned_budget")} placeholder="0" /></Field>

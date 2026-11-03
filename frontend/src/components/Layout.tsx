@@ -1,24 +1,38 @@
 /** Mise en page de l'application : barre latérale, barre supérieure, bandeau « données simulées ». */
 import {
-  BarChart3, Bot, ChevronsLeft, ChevronsRight, FileText, FolderKanban, LayoutDashboard, LogOut, Menu, Shield,
-  TriangleAlert, Upload, UserRound, Users, Wallet, X,
+  BarChart3, Bell, BellRing, Bot, ChevronsLeft, ChevronsRight, FileText, FolderKanban, GitCompareArrows, LayoutDashboard,
+  LogOut, Menu, Shield, ShieldAlert, Target, TriangleAlert, Upload, UserRound, Users, Wallet, X,
 } from "lucide-react";
+import { api } from "../api/client";
+import type { AlertSummary } from "../api/types";
 import { Suspense, useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { peut, ROLE_LABELS } from "../lib/format";
 import { useData } from "./DataContext";
 
-const NAV = [
-  { to: "/", label: "Tableau de bord", icon: LayoutDashboard, end: true },
-  { to: "/projets", label: "Projets", icon: FolderKanban },
-  { to: "/analyses", label: "Analyses", icon: BarChart3 },
-  { to: "/cohortes", label: "Cohortes", icon: Users },
-  { to: "/financements", label: "Financements", icon: Wallet },
-  { to: "/assistant", label: "CIAT AI Analyst", icon: Bot },
-  { to: "/rapports", label: "Rapports", icon: FileText },
-  { to: "/importation", label: "Importation", icon: Upload, perm: "importer" as const },
-  { to: "/administration", label: "Administration", icon: Shield, perm: "administrer" as const },
+type Lien = { to: string; label: string; icon: typeof LayoutDashboard; end?: boolean; perm?: "importer" | "administrer" };
+// Navigation regroupée par usage (V2) pour ne pas surcharger le menu
+const SECTIONS: { titre: string; liens: Lien[] }[] = [
+  { titre: "Pilotage", liens: [
+    { to: "/", label: "Tableau de bord", icon: LayoutDashboard, end: true },
+    { to: "/alertes", label: "Alertes", icon: BellRing },
+    { to: "/objectifs", label: "Objectifs", icon: Target },
+    { to: "/assistant", label: "CIAT AI Analyst", icon: Bot },
+  ] },
+  { titre: "Analyse", liens: [
+    { to: "/analyses", label: "Analyses", icon: BarChart3 },
+    { to: "/comparaisons", label: "Comparaisons", icon: GitCompareArrows },
+    { to: "/risques", label: "Risques", icon: ShieldAlert },
+    { to: "/rapports", label: "Rapports", icon: FileText },
+  ] },
+  { titre: "Gestion", liens: [
+    { to: "/projets", label: "Projets", icon: FolderKanban },
+    { to: "/cohortes", label: "Cohortes", icon: Users },
+    { to: "/financements", label: "Financements", icon: Wallet },
+    { to: "/importation", label: "Importation", icon: Upload, perm: "importer" },
+  ] },
+  { titre: "Système", liens: [{ to: "/administration", label: "Administration", icon: Shield, perm: "administrer" }] },
 ];
 
 export default function Layout() {
@@ -32,17 +46,35 @@ export default function Layout() {
   useEffect(() => { setMobile(false); }, [loc.pathname]);
   useEffect(() => { try { localStorage.setItem("ciat_sidebar", replie ? "1" : "0"); } catch { /* indisponible */ } }, [replie]);
 
-  const items = NAV.filter((n) => !n.perm || peut(user?.role, n.perm));
+  // Compteur des alertes non lues (cloche de la barre supérieure), actualisé à chaque changement de page
+  const [alertes, setAlertes] = useState<AlertSummary | null>(null);
+  useEffect(() => { api.get<AlertSummary>("/alerts/summary").then(setAlertes).catch(() => undefined); }, [loc.pathname]);
+  const nonLues = alertes?.unread ?? 0;
+
   const nav = (compact: boolean) => (
-    <nav className="flex flex-1 flex-col gap-1 px-2 py-3" aria-label="Navigation principale">
-      {items.map(({ to, label, icon: Icon, end }) => (
-        <NavLink key={to} to={to} end={end} title={compact ? label : undefined}
-          className={({ isActive }) => `flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${
-            isActive ? "bg-white/10 font-semibold text-beige" : "text-white/85 hover:bg-white/5 hover:text-white"} ${compact ? "justify-center" : ""}`}>
-          <Icon className="size-5 shrink-0" aria-hidden />
-          {!compact && <span>{label}</span>}
-        </NavLink>
-      ))}
+    <nav className="flex flex-1 flex-col gap-3 overflow-y-auto px-2 py-3" aria-label="Navigation principale">
+      {SECTIONS.map((sec) => {
+        const liens = sec.liens.filter((n) => !n.perm || peut(user?.role, n.perm));
+        if (!liens.length) return null;
+        return (
+          <div key={sec.titre}>
+            {!compact && <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/45">{sec.titre}</p>}
+            <div className="flex flex-col gap-0.5">
+              {liens.map(({ to, label, icon: Icon, end }) => (
+                <NavLink key={to} to={to} end={end} title={compact ? label : undefined}
+                  className={({ isActive }) => `relative flex items-center gap-3 rounded-md px-3 py-1.5 text-sm transition-colors ${
+                    isActive ? "bg-white/10 font-semibold text-beige" : "text-white/85 hover:bg-white/5 hover:text-white"} ${compact ? "justify-center" : ""}`}>
+                  <Icon className="size-[18px] shrink-0" aria-hidden />
+                  {!compact && <span className="flex-1">{label}</span>}
+                  {to === "/alertes" && nonLues > 0 && (
+                    <span className={`rounded-full bg-red-600 px-1.5 text-[10px] font-bold text-white ${compact ? "absolute right-1 top-0.5" : ""}`}>{nonLues > 99 ? "99+" : nonLues}</span>
+                  )}
+                </NavLink>
+              ))}
+            </div>
+          </div>
+        );
+      })}
     </nav>
   );
 
@@ -85,6 +117,11 @@ export default function Layout() {
             <p className="truncate text-sm font-semibold text-profond">CIAT VISION</p>
             <p className="hidden truncate text-xs text-muted sm:block">{meta?.institution ?? "ISEP Amadou Trawaré de Diamniadio"} · Centre d'Innovation, d'Application et de Transfert</p>
           </div>
+          <Link to="/alertes" className="relative rounded-md p-2 text-profond hover:bg-gris" title="Alertes non lues"
+            aria-label={`Alertes : ${nonLues} non lue(s)`}>
+            <Bell className="size-5" />
+            {nonLues > 0 && <span className="absolute -right-0.5 -top-0.5 min-w-[18px] rounded-full bg-red-600 px-1 text-center text-[10px] font-bold leading-[18px] text-white">{nonLues > 99 ? "99+" : nonLues}</span>}
+          </Link>
           <Link to="/profil" className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-gris" title="Mon profil">
             <span className="flex size-8 items-center justify-center rounded-full bg-beige text-sm font-semibold text-profond">
               {user?.full_name.split(" ").map((x) => x[0]).slice(0, 2).join("")}

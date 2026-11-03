@@ -27,6 +27,7 @@ export interface ProjectItem {
   id: number; name: string; leader: string; domain: string; domain_id: number; cohort: string; cohort_id: number;
   status: string; progress_pct: number; planned_budget: number; funding_obtained: number; deadline: string | null;
   is_delayed: boolean; created_at: string; updated_at: string; is_simulated: boolean;
+  responsible: string | null; responsible_id: number | null;
 }
 
 export interface Page<T> { items: T[]; total: number; page: number; page_size: number }
@@ -40,6 +41,7 @@ export interface ProjectDetail {
   is_delayed: boolean;
   domain: { id: number; name: string };
   cohort: { id: number; name: string; start_date: string; end_date: string };
+  responsible: { id: number; name: string } | null;
   leader: { id: number; first_name: string; last_name: string; gender: string | null; profile: string; email: string | null; phone: string | null };
   application: { id: number; status: string; submitted_at: string; decision_date: string | null; average_score: number | null };
   evaluations: Evaluation[];
@@ -92,6 +94,59 @@ export interface Partner { id: number; name: string; type: string }
 export interface Leader { id: number; first_name: string; last_name: string; gender: string | null; profile: string; email: string | null; phone: string | null }
 
 export interface AskResult {
-  answer: string; mode: string; simulated: boolean;
+  answer: string; mode: string; simulated: boolean; filters?: string | null;
   tools: { name: string; arguments: unknown; result: unknown; error: string | null }[];
+}
+
+// ------------------------------------------------------------------ V2
+export interface ChartsV2 extends Charts {
+  projects_monthly: { month: string; projects: number; selected: number; completed: number }[];
+  domain_performance: { domain: string; completion_rate: number | null; delay_rate: number | null; avg_progress: number | null; projects: number; funding_granted: number }[];
+  levels: { performance: { level: string; count: number }[]; funding: { level: string; count: number }[] };
+}
+
+export interface MetaV2 extends Meta {
+  performance_levels: string[];
+  funding_levels: string[];
+  performance_definition: string;
+  funding_definition: string;
+}
+
+export interface Responsable { id: number; full_name: string; function: string | null; is_active: boolean; projects: number; is_simulated: boolean }
+
+export interface AlertItem {
+  id: number; type: string; level: string; title: string; problem: string; explanation: string;
+  recommended_action: string; project_id: number | null; project: string | null; objective_id: number | null;
+  detected_at: string; last_seen_at: string; resolved_at: string | null; archived_at: string | null; is_read: boolean;
+}
+export interface AlertSummary { by_level: Record<string, { total: number; unread: number }>; total: number; unread: number }
+
+export interface RiskFactor { code: string; libelle: string; points: number; detail: string }
+export interface RiskProject {
+  project_id: number; name: string; domain: string; cohort: string; responsible: string | null; status: string;
+  progress_pct: number; expected_pct: number | null; score: number; level: string; factors: RiskFactor[];
+}
+export interface RiskAnalysis {
+  perimetre: string; modele: { code: string; nom: string; methode: string }; avertissement: string; total: number;
+  par_niveau: Record<string, number>; facteurs_frequents: { facteur: string; projets: number }[]; projets: RiskProject[];
+}
+
+export interface ObjectiveItem {
+  id: number; label: string; indicator: string; indicator_label: string; unit: "count" | "amount" | "percent";
+  definition: string; target: number; current: number | null; realization_rate: number | null; gap: number | null;
+  status: string; start_date: string; end_date: string; elapsed_rate: number; cohort_id: number | null;
+  cohort: string | null; domain_id: number | null; domain: string | null; is_simulated: boolean;
+}
+
+export interface CompareItem {
+  id: number; label: string; total_projects?: number; completion_rate?: number | null; avg_progress?: number | null;
+  delay_rate?: number | null; funding_granted?: number; prototypes?: number; applications?: number;
+  // comparaison de projets
+  domain?: string; cohort?: string; status?: string; progress_pct?: number; expected_pct?: number | null;
+  days_late?: number; planned_budget?: number; coverage_rate?: number | null; prototype?: boolean; completed?: boolean;
+  risk_score?: number | null; risk_level?: string | null;
+}
+export interface CompareResult {
+  dimension: string; items: CompareItem[]; perimetre: string; warnings: string[];
+  metrics?: Record<string, { label: string; unit: KpiUnit; definition: string }>;
 }

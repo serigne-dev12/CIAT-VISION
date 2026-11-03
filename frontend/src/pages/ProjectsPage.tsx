@@ -19,7 +19,7 @@ const TRIS = [
 
 export default function ProjectsPage() {
   const { user } = useAuth();
-  const { params, filters, setFilters } = useData();
+  const { params, filters, applyFilters } = useData();
   const [sp, setSp] = useSearchParams();
   const nav = useNavigate();
   const [q, setQ] = useState("");
@@ -28,20 +28,25 @@ export default function ProjectsPage() {
   const [order, setOrder] = useState<"asc" | "desc">("desc");
   const [retard, setRetard] = useState(sp.get("delayed") === "1");
   const [form, setForm] = useState(false);
+  const [progMin, setProgMin] = useState("");
+  const [progMax, setProgMax] = useState("");
+  const dMin = useDebounced(progMin);
+  const dMax = useDebounced(progMax);
   const dq = useDebounced(q);
 
   // Liens depuis le tableau de bord : ?status=… ou ?delayed=1
   useEffect(() => {
     const s = sp.get("status");
-    if (s && s !== filters.status) setFilters({ ...filters, status: s });
+    if (s && s !== filters.status) applyFilters({ ...filters, status: s });
     if (s || sp.get("delayed")) setSp({}, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  useEffect(() => { setPage(1); }, [dq, retard, JSON.stringify(params), sort, order]);
+  useEffect(() => { setPage(1); }, [dq, retard, JSON.stringify(params), sort, order, dMin, dMax]);
 
   const liste = useApi(() => api.get<Page<ProjectItem>>("/projects", {
     ...params, q: dq, delayed_only: retard || undefined, sort, order, page, page_size: 20,
-  }), [JSON.stringify(params), dq, retard, sort, order, page]);
+    progress_min: dMin === "" ? undefined : Number(dMin), progress_max: dMax === "" ? undefined : Number(dMax),
+  }), [JSON.stringify(params), dq, retard, sort, order, page, dMin, dMax]);
 
   return (
     <div className="space-y-5">
@@ -60,6 +65,15 @@ export default function ProjectsPage() {
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
             <input className="champ pl-9" placeholder="Rechercher un projet, une description, un porteur…" value={q}
               onChange={(e) => setQ(e.target.value)} aria-label="Rechercher" maxLength={100} />
+          </div>
+          <div className="flex items-center gap-1 text-sm" role="group" aria-label="Progression">
+            <span className="text-xs text-muted">Progression</span>
+            <input className="champ !w-16" inputMode="numeric" placeholder="min" value={progMin} aria-label="Progression minimale (%)"
+              onChange={(e) => setProgMin(e.target.value.replace(/\D/g, "").slice(0, 3))} />
+            <span className="text-muted">–</span>
+            <input className="champ !w-16" inputMode="numeric" placeholder="max" value={progMax} aria-label="Progression maximale (%)"
+              onChange={(e) => setProgMax(e.target.value.replace(/\D/g, "").slice(0, 3))} />
+            <span className="text-xs text-muted">%</span>
           </div>
           <label className={`btn-secondaire cursor-pointer ${retard ? "!border-alerte !text-alerte" : ""}`}>
             <input type="checkbox" className="sr-only" checked={retard} onChange={(e) => setRetard(e.target.checked)} />
@@ -85,7 +99,7 @@ export default function ProjectsPage() {
                       <tr key={p.id} className="cursor-pointer" onClick={() => nav(`/projets/${p.id}`)}>
                         <td className="max-w-[280px]">
                           <span className="line-clamp-1 font-medium text-profond">{p.name}</span>
-                          <span className="text-xs text-muted">{p.leader}</span>
+                          <span className="text-xs text-muted">{p.leader}{p.responsible ? ` · suivi : ${p.responsible}` : ""}</span>
                         </td>
                         <td className="max-w-[160px] truncate text-xs">{p.domain}</td>
                         <td className="whitespace-nowrap">{p.cohort}</td>

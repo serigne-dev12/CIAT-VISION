@@ -1,5 +1,5 @@
 /** Module 9 – Administration : utilisateurs, paramètres, journal d'audit, données. */
-import { Database, KeyRound, Pencil, Plus, ScrollText, Settings, Users } from "lucide-react";
+import { Database, HardDriveDownload, KeyRound, Pencil, Plus, ScrollText, Settings, Upload, Users } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../api/client";
 import type { Role, User } from "../api/types";
@@ -12,6 +12,7 @@ import { errMsg, useApi } from "../lib/hooks";
 const ONGLETS = [
   { k: "users", l: "Utilisateurs", i: Users }, { k: "settings", l: "Paramètres", i: Settings },
   { k: "audit", l: "Journal d'activité", i: ScrollText }, { k: "data", l: "Données", i: Database },
+  { k: "backup", l: "Sauvegarde", i: HardDriveDownload },
 ] as const;
 
 function Utilisateurs() {
@@ -182,6 +183,56 @@ function Donnees() {
   );
 }
 
+function Sauvegarde() {
+  const toast = useToast();
+  const { reloadRefs } = useData();
+  const [fichier, setFichier] = useState<File | null>(null);
+  const [mot, setMot] = useState("");
+  const [occupe, setOccupe] = useState(false);
+  const telecharger = async () => {
+    setOccupe(true);
+    try { await api.download("/admin/backup", undefined, "ciat_vision_sauvegarde.json.gz"); toast("succes", "Sauvegarde téléchargée."); }
+    catch (e) { toast("erreur", errMsg(e)); } finally { setOccupe(false); }
+  };
+  const restaurer = async () => {
+    if (!fichier) return;
+    setOccupe(true);
+    const fd = new FormData();
+    fd.append("confirmation", mot);
+    fd.append("file", fichier);
+    try {
+      const r = await api.form<{ tables: Record<string, number>; created_at: string }>("/admin/restore", fd);
+      const total = Object.values(r.tables).reduce((a, b) => a + b, 0);
+      toast("succes", `Restauration terminée : ${total} lignes (sauvegarde du ${fmtDateHeure(r.created_at)}).`);
+      setFichier(null); setMot(""); reloadRefs();
+    } catch (e) { toast("erreur", errMsg(e)); } finally { setOccupe(false); }
+  };
+  return (
+    <div className="grid gap-5 lg:grid-cols-2">
+      <Card title="Sauvegarder la base">
+        <p className="text-sm">Télécharge une copie complète de toutes les tables (projets, financements, comptes, journal…) au format JSON compressé.</p>
+        <p className="mt-2 text-xs text-alerte">Le fichier contient des données personnelles et les empreintes des mots de passe : conservez-le en lieu sûr.</p>
+        <button className="btn-principal mt-4" onClick={telecharger} disabled={occupe}><HardDriveDownload className="size-4" /> Télécharger la sauvegarde</button>
+        <p className="mt-3 text-xs text-muted">Sur un serveur, la sauvegarde PostgreSQL native (pg_dump) reste recommandée en complément : voir le guide d'installation.</p>
+      </Card>
+      <Card title="Restaurer une sauvegarde">
+        <p className="text-sm">Remplace <b>toutes les données actuelles</b> par celles de la sauvegarde, en une seule opération (tout ou rien). La sauvegarde doit provenir de la même version de l'application.</p>
+        <label className="mt-3 flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-ligne p-3 text-sm hover:bg-gris">
+          <Upload className="size-4 text-beige-fonce" /> {fichier ? fichier.name : "Choisir un fichier .json.gz"}
+          <input type="file" accept=".gz,application/gzip" className="sr-only" onChange={(e) => setFichier(e.target.files?.[0] ?? null)} />
+        </label>
+        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3">
+          <label className="etiquette !text-red-900" htmlFor="restaurer">Saisissez RESTAURER pour confirmer</label>
+          <div className="flex gap-2">
+            <input id="restaurer" className="champ" value={mot} onChange={(e) => setMot(e.target.value)} placeholder="RESTAURER" />
+            <button className="btn-danger" disabled={!fichier || mot !== "RESTAURER" || occupe} onClick={restaurer}>Restaurer</button>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const [onglet, setOnglet] = useState<(typeof ONGLETS)[number]["k"]>("users");
   return (
@@ -199,6 +250,7 @@ export default function AdminPage() {
       {onglet === "settings" && <Parametres />}
       {onglet === "audit" && <Journal />}
       {onglet === "data" && <Donnees />}
+      {onglet === "backup" && <Sauvegarde />}
     </div>
   );
 }

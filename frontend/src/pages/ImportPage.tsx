@@ -7,6 +7,7 @@ import { Card, ConfirmDialog, ErrorBox, Spinner, useToast } from "../components/
 import { errMsg, useApi } from "../lib/hooks";
 
 interface Entite { key: string; label: string; columns: { name: string; required: boolean; kind: string; choices: string[] | null }[] }
+interface Bilan { imported: number; skipped: number; fichier: string; report: { line: number; status: string; reason: string }[] }
 interface Apercu {
   missing_columns: string[]; total_rows: number; valid_rows: number; error_rows: number; duplicate_rows: number;
   rows: { line: number; valid: boolean; errors: string[]; duplicate: string | null; data: Record<string, unknown> }[];
@@ -22,10 +23,11 @@ export default function ImportPage() {
   const [erreur, setErreur] = useState<string | null>(null);
   const [occupe, setOccupe] = useState(false);
   const [confirmer, setConfirmer] = useState(false);
+  const [bilan, setBilan] = useState<Bilan | null>(null);
   const def = entites.data?.find((e) => e.key === entite);
 
   const analyser = async (f: File) => {
-    setFichier(f); setApercu(null); setErreur(null); setOccupe(true);
+    setFichier(f); setApercu(null); setErreur(null); setOccupe(true); setBilan(null);
     const fd = new FormData();
     fd.append("entity", entite);
     fd.append("file", f);
@@ -41,8 +43,9 @@ export default function ImportPage() {
     fd.append("ignore_invalid", String(apercu.valid_rows < apercu.total_rows));
     fd.append("file", fichier);
     try {
-      const r = await api.form<{ imported: number; skipped: number }>("/imports/commit", fd);
+      const r = await api.form<Omit<Bilan, "fichier">>("/imports/commit", fd);
       toast("succes", `${r.imported} ligne(s) importée(s), ${r.skipped} ignorée(s).`);
+      setBilan({ ...r, fichier: fichier.name });
       setApercu(null); setFichier(null); setConfirmer(false);
       reloadRefs();
     } catch (e) { toast("erreur", errMsg(e)); setConfirmer(false); } finally { setOccupe(false); }
@@ -117,6 +120,26 @@ export default function ImportPage() {
               </div>
             </>
           )}
+        </Card>
+      )}
+
+      {bilan && (
+        <Card title="4. Rapport final d'importation" subtitle={`Fichier « ${bilan.fichier} » – ${bilan.imported} ligne(s) importée(s), ${bilan.skipped} ignorée(s)`}
+          actions={<button className="btn-secondaire !py-1" onClick={() => {
+            const lignes = ["Ligne;Statut;Motif", ...bilan.report.map((x) => `${x.line};${x.status};"${x.reason.replace(/"/g, '""')}"`)];
+            const csv = "﻿" + lignes.join("\n");  // BOM : accents corrects à l'ouverture dans Excel
+            const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+            const a = document.createElement("a"); a.href = url; a.download = `rapport_import_${bilan.fichier.replace(/\.[^.]+$/, "")}.csv`; a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 2000);
+          }}><Download className="size-4" /> Télécharger (CSV)</button>}>
+          <div className="-mx-4 max-h-80 overflow-auto">
+            <table className="tableau"><thead><tr><th>Ligne</th><th>Statut</th><th>Motif</th></tr></thead>
+              <tbody>{bilan.report.map((x) => (
+                <tr key={x.line}><td className="tabular-nums">{x.line}</td>
+                  <td className={x.status === "Importée" ? "text-emerald-800" : "text-red-900"}>{x.status}</td>
+                  <td className="text-xs">{x.reason || "—"}</td></tr>))}
+              </tbody></table>
+          </div>
         </Card>
       )}
 

@@ -3,7 +3,7 @@ import { AlarmClock, ArrowLeft, Check, Pencil, Plus, Trash2 } from "lucide-react
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
-import type { ProjectDetail } from "../api/types";
+import type { AlertItem, ProjectDetail, RiskAnalysis } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { Card, ConfirmDialog, ErrorBox, Field, Modal, ProgressBar, Spinner, StatusBadge, useToast } from "../components/ui";
 import { fmtDate, fmtDateHeure, fmtFCFA, peut, todayISO } from "../lib/format";
@@ -18,6 +18,8 @@ export default function ProjectDetailPage() {
   const toast = useToast();
   const edit = peut(user?.role, "modifier");
   const { data: p, error, reload, setData } = useApi(() => api.get<ProjectDetail>(`/projects/${id}`), [id]);
+  const alertesProjet = useApi(() => api.get<{ items: AlertItem[] }>("/alerts", { project_id: id }), [id]);
+  const risque = useApi(() => api.get<RiskAnalysis>("/risks"), []);
   const [modal, setModal] = useState<null | "edit" | "status" | "progress" | "eval" | "milestone" | "delete" | "funding">(null);
   const [statut, setStatut] = useState("");
   const [commentaire, setCommentaire] = useState("");
@@ -75,6 +77,7 @@ export default function ProjectDetailPage() {
           <dl className="space-y-3 text-sm">
             {[
               ["Porteur", `${p.leader.first_name} ${p.leader.last_name}`],
+              ["Responsable de suivi", p.responsible?.name ?? "Non attribué"],
               ["Profil", p.leader.profile], ["Genre", p.leader.gender ?? "Non renseigné"],
               ["E-mail", p.leader.email ?? (user?.role === "analyst" ? "Masqué (rôle Analyste)" : "—")],
               ["Téléphone", p.leader.phone ?? (user?.role === "analyst" ? "Masqué (rôle Analyste)" : "—")],
@@ -148,6 +151,36 @@ export default function ProjectDetailPage() {
             ))}
             {!p.evaluations.length && <li className="text-sm text-muted">Aucune évaluation saisie. Une évaluation est requise avant la décision du comité.</li>}
           </ul>
+        </Card>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Card title="Alertes actives du projet" actions={<Link to="/alertes" className="btn-lien">Centre d'alertes</Link>}>
+          {!alertesProjet.data ? <Spinner /> : alertesProjet.data.items.length === 0 ? <p className="text-sm text-muted">Aucune alerte active.</p> : (
+            <ul className="space-y-2">{alertesProjet.data.items.map((a) => (
+              <li key={a.id} className="rounded-md border border-ligne p-2.5 text-sm">
+                <p className="font-medium"><span className="mr-2 rounded bg-gris px-1.5 py-0.5 text-xs">{a.level}</span>{a.type}</p>
+                <p className="text-xs text-muted">{a.problem}</p>
+                <p className="mt-1 text-xs"><b>Action recommandée :</b> {a.recommended_action}</p>
+              </li>))}
+            </ul>
+          )}
+        </Card>
+        <Card title="Analyse de risque" subtitle="Règles transparentes – pas une prédiction">
+          {(() => {
+            const e = risque.data?.projets.find((x) => x.project_id === p.id);
+            if (!risque.data) return <Spinner />;
+            if (!e) return <p className="text-sm text-muted">Projet non évalué (seuls les projets actifs ou suspendus le sont).</p>;
+            return (
+              <div className="space-y-2 text-sm">
+                <p>Score <b className="text-lg text-profond">{e.score}/100</b> · niveau <b>{e.level}</b>
+                  {e.expected_pct !== null && <> · progression attendue {e.expected_pct.toLocaleString("fr-FR")} %</>}</p>
+                {e.factors.length === 0 ? <p className="text-muted">Aucun facteur de risque détecté.</p> : (
+                  <ul className="space-y-1">{e.factors.map((x) => <li key={x.code}><b>+{x.points}</b> {x.libelle} – <span className="text-muted">{x.detail}</span></li>)}</ul>
+                )}
+              </div>
+            );
+          })()}
         </Card>
       </div>
 

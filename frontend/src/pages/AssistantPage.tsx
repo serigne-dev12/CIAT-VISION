@@ -3,6 +3,7 @@ import { Bot, ChevronDown, Database, Send, Sparkles, User as UserIcon } from "lu
 import { Fragment, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { api } from "../api/client";
 import type { AskResult } from "../api/types";
+import { useData } from "../components/DataContext";
 import { Card, Spinner } from "../components/ui";
 import { errMsg, useApi } from "../lib/hooks";
 
@@ -59,6 +60,8 @@ function Outils({ result }: { result: AskResult }) {
 
 export default function AssistantPage() {
   const statut = useApi(() => api.get<Statut>("/assistant/status"), []);
+  const { body, chips } = useData();
+  const [avecFiltres, setAvecFiltres] = useState(true);
   const [messages, setMessages] = useState<Message[]>([]);
   const [q, setQ] = useState("");
   const [envoi, setEnvoi] = useState(false);
@@ -73,7 +76,7 @@ export default function AssistantPage() {
     setQ("");
     setEnvoi(true);
     try {
-      const r = await api.post<AskResult>("/assistant/ask", { question: texte });
+      const r = await api.post<AskResult>("/assistant/ask", { question: texte, filters: avecFiltres && chips.length ? body : null });
       setMessages((m) => [...m, { role: "assistant", text: r.answer, result: r }]);
       statut.reload();
     } catch (e) {
@@ -108,7 +111,8 @@ export default function AssistantPage() {
                   {m.role === "user" ? <p className="text-sm">{m.text}</p> : <Texte text={m.text} />}
                   {m.result && (
                     <>
-                      <p className="mt-1 text-[11px] text-muted">Mode : {m.result.mode === "IA" ? "IA générative (Claude)" : m.result.mode}</p>
+                      <p className="mt-1 text-[11px] text-muted">Mode : {m.result.mode === "IA" ? "IA générative (Claude)" : m.result.mode}
+                        {m.result.filters && <> · Filtres pris en compte : {m.result.filters}</>}</p>
                       <Outils result={m.result} />
                     </>
                   )}
@@ -119,6 +123,13 @@ export default function AssistantPage() {
             {envoi && <Spinner label="Analyse des données en cours…" />}
             <div ref={fin} />
           </div>
+          {chips.length > 0 && (
+            <label className="flex flex-wrap items-center gap-2 border-t border-ligne px-3 pt-2 text-xs text-muted">
+              <input type="checkbox" checked={avecFiltres} onChange={(e) => setAvecFiltres(e.target.checked)} />
+              Tenir compte des filtres actifs du tableau de bord :
+              {chips.map((c) => <span key={c.key} className="rounded-full bg-beige-pale px-2 py-0.5 text-profond">{c.label}</span>)}
+            </label>
+          )}
           <form onSubmit={submit} className="flex gap-2 border-t border-ligne p-3">
             <input className="champ" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ex. : Quels projets nécessitent une attention particulière ?"
               maxLength={1000} aria-label="Votre question" disabled={envoi} />

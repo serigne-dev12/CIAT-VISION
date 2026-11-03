@@ -19,6 +19,10 @@ const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const ProjectDetailPage = lazy(() => import("./pages/ProjectDetailPage"));
 const ProjectsPage = lazy(() => import("./pages/ProjectsPage"));
 const ReportsPage = lazy(() => import("./pages/ReportsPage"));
+const AlertsPage = lazy(() => import("./pages/AlertsPage"));
+const ComparisonPage = lazy(() => import("./pages/ComparisonPage"));
+const RisksPage = lazy(() => import("./pages/RisksPage"));
+const ObjectivesPage = lazy(() => import("./pages/ObjectivesPage"));
 
 
 function Protected({ children, perm }: { children: ReactNode; perm?: keyof typeof PERMISSIONS }) {
@@ -52,6 +56,10 @@ function Shell() {
         <Route path="financements" element={<FundingsPage />} />
         <Route path="assistant" element={<AssistantPage />} />
         <Route path="rapports" element={<ReportsPage />} />
+        <Route path="alertes" element={<AlertsPage />} />
+        <Route path="comparaisons" element={<ComparisonPage />} />
+        <Route path="risques" element={<RisksPage />} />
+        <Route path="objectifs" element={<ObjectivesPage />} />
         <Route path="importation" element={<Protected perm="importer"><ImportPage /></Protected>} />
         <Route path="administration" element={<Protected perm="administrer"><AdminPage /></Protected>} />
         <Route path="profil" element={<ProfilePage />} />
