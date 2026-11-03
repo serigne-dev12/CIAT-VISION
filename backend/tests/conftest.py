@@ -3,8 +3,23 @@ from __future__ import annotations
 
 import os
 
-os.environ["DATABASE_URL"] = os.environ.get(
-    "TEST_DATABASE_URL", "postgresql+psycopg://postgres:MOT_DE_PASSE@127.0.0.1:5433/ciat_vision_test")
+from pathlib import Path
+
+
+def _url_de_test() -> str:
+    """TEST_DATABASE_URL : variable d'environnement, sinon ligne du fichier backend/.env (non versionné),
+    sinon base de test du docker-compose.yml."""
+    if os.environ.get("TEST_DATABASE_URL"):
+        return os.environ["TEST_DATABASE_URL"]
+    env = Path(__file__).resolve().parents[1] / ".env"
+    if env.exists():
+        for ligne in env.read_text(encoding="utf-8").splitlines():
+            if ligne.startswith("TEST_DATABASE_URL="):
+                return ligne.split("=", 1)[1].strip()
+    return "postgresql+psycopg://ciat:ciat_local@127.0.0.1:5432/ciat_vision_test"
+
+
+os.environ["DATABASE_URL"] = _url_de_test()
 os.environ["ANTHROPIC_API_KEY"] = ""  # les tests n'appellent jamais le vrai service d'IA
 os.environ["ENVIRONMENT"] = "test"
 

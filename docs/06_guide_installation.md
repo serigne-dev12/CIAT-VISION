@@ -74,7 +74,7 @@ Commandes utiles :
 ```bash
 python -m app.seed --reset                  # purge puis régénère les données simulées
 python -m scripts.generer_dictionnaire      # régénère docs/03_base_de_donnees.md
-python -m pytest                            # 80 tests (utilise TEST_DATABASE_URL ou ciat_vision_test sur le port 5433)
+python -m pytest                            # 80 tests sur la base TEST_DATABASE_URL (fichier .env)
 ```
 
 ## 4. Frontend (React)
