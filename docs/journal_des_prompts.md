@@ -138,3 +138,17 @@ dessin, comme le verre de la loupe, sont conservés ; bords adoucis sans liseré
 avec cette version de Pillow, une image créée par `Image.fromarray` partage la mémoire du tableau et le remplissage
 (`floodfill`) ne la modifiait pas. Corrigé par une copie (`.copy()`), puis seuil ajusté (fond de l'original à
 253-254 et non 255) : 80 % des pixels deviennent transparents, 0,4 % semi-transparents (contours).
+
+---
+
+## Entrée 6 – Retrait du trait vertical du logo
+
+**Date :** 03/11/2026
+**Outil :** Claude Code (Claude Opus 5.5)
+
+**Prompt :** « même le trait vertical qui est entre CIAT et VISION, il faut l'enlever ».
+
+**Résultat obtenu :** le trait séparant l'emblème du texte « CIAT VISION » est retiré dans toutes les versions du
+logo (interface, PDF, couverture des livrables). La zone effacée a été vérifiée au préalable : elle ne contient que
+ce trait ; la ligne « ISEP AMADOU TRAWARÉ », qui passe dans les mêmes colonnes plus bas, est intacte. L'opération
+est intégrée au script reproductible `scripts/preparer_logo.py`.

@@ -2,6 +2,7 @@
 
 - Fond blanc rendu TRANSPARENT (seulement le fond relié aux bords : les blancs intérieurs du logo sont conservés).
 - Bords adoucis conservés, couleurs décontaminées (pas de liseré blanc).
+- Trait vertical séparateur retiré (demande du réalisateur).
 - Versions par simple recadrage : aucune déformation, aucune recoloration.
 
 Prérequis : pip install pillow numpy      Usage : python scripts/preparer_logo.py
@@ -17,6 +18,10 @@ RACINE = Path(__file__).resolve().parent.parent
 ORIGINAL = RACINE / "docs" / "logo" / "ciat_vision_logo_original.png"
 SEUIL_TRANSPARENT = 243  # au-dessus : fond entièrement transparent (le fond de l'original vaut 253-254)
 SEUIL_OPAQUE = 200       # en dessous : pixel du logo entièrement opaque
+# Trait vertical entre l'emblème et « CIAT VISION », retiré à la demande du réalisateur.
+# Zone (x0, y0, x1, y1) de l'original vérifiée : elle ne contient que ce trait (y 137 à 620) ; la ligne
+# « ISEP AMADOU TRAWARÉ », qui passe dans les mêmes colonnes plus bas (y > 665), n'est pas touchée.
+ZONE_TRAIT_VERTICAL = (742, 120, 801, 662)
 
 
 def transparent(chemin: Path) -> Image.Image:
@@ -33,6 +38,8 @@ def transparent(chemin: Path) -> Image.Image:
     alpha[fond] = np.clip((SEUIL_TRANSPARENT - mn[fond]) / (SEUIL_TRANSPARENT - SEUIL_OPAQUE), 0, 1)
     a = alpha[..., None]
     couleur = np.clip(np.where(a > 0, (rgb - (1 - a) * 255) / np.maximum(a, 1e-6), 0), 0, 255)
+    x0, y0, x1, y1 = ZONE_TRAIT_VERTICAL
+    alpha[y0:y1, x0:x1] = 0
     return Image.fromarray(np.dstack([couleur, alpha * 255]).astype("uint8"), "RGBA")
 
 

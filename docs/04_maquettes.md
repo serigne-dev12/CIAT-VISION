@@ -25,7 +25,8 @@ simulées. Elles garantissent que ce qui est présenté au jury correspond exact
 ## 2. Logo
 
 Le **logo officiel CIAT VISION** fourni par le réalisateur est utilisé sans aucune déformation ni recoloration.
-Son fond blanc a été rendu **transparent** (bords adoucis conservés, sans liseré) ; les trois versions sont de simples
+Son fond blanc a été rendu **transparent** (bords adoucis conservés, sans liseré) et le trait vertical qui séparait
+l'emblème du texte a été retiré, à la demande du réalisateur ; les trois versions sont de simples
 recadrages, proportions conservées. Original : `docs/logo/ciat_vision_logo_original.png` ; version transparente :
 `docs/logo/ciat_vision_logo_transparent.png` ; préparation reproductible : `scripts/preparer_logo.py`.
 
