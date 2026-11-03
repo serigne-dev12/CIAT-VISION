@@ -38,7 +38,9 @@ KPI_DEFINITIONS: dict[str, tuple[str, str, str]] = {
                "Projets « Sélectionné », « En incubation », « En développement » ou « Prototype réalisé »."),
     "incubated": ("Projets incubés", "count",
                   "Projets ayant atteint au moins « En incubation » (y compris terminés et suspendus)."),
-    "selection_rate": ("Taux de sélection", "rate", "Candidatures acceptées ÷ (acceptées + rejetées)."),
+    "selection_rate": ("Taux de sélection", "rate", "Candidatures acceptées ÷ (acceptées + rejetées). Non calculable quand le "
+                       "périmètre est restreint par statut, responsable, performance ou financement : ces filtres ne "
+                       "retiennent que des dossiers déjà décidés, ce qui fausserait le dénominateur."),
     "completion_rate": ("Taux d'achèvement", "rate", "Projets terminés ÷ projets incubés."),
     "delay_rate": ("Taux de retard", "rate", "Projets en retard ÷ projets actifs."),
     "avg_progress": ("Progression moyenne", "percent", "Moyenne des progressions des projets actifs."),
@@ -173,6 +175,15 @@ class Filters:
         return " | ".join(parts) or "Toutes les données"
 
 
+def selection_rate_applicable(f: Filters) -> bool:
+    """Le taux de sélection n'a de sens que si le périmètre contient aussi les dossiers non retenus.
+
+    Les filtres de statut, de responsable, de performance et de financement portent sur des projets
+    déjà sélectionnés (ou sur un statut donné) : le taux serait mécaniquement de 100 % (ou de 0 %).
+    """
+    return not (f.statuses or f.responsible_ids or f.performance_levels or f.funding_levels)
+
+
 def _ratio(a: float | int, b: float | int) -> float | None:
     """Dénominateur nul → None (« non calculable »), jamais 0 ni erreur (cahier des charges § 7.3)."""
     return round(a / b, 4) if b else None
@@ -247,7 +258,7 @@ def compute_kpis(db: Session, f: Filters, today: date | None = None) -> dict[str
         "planned_budget": int(r.planned_budget),
         "remaining_to_receive": granted - received,
         "uncovered_need": max(0, int(budget_selected) - granted),
-        "selection_rate": _ratio(r.selected, r.selected + r.rejected),
+        "selection_rate": _ratio(r.selected, r.selected + r.rejected) if selection_rate_applicable(f) else None,
         "completion_rate": _ratio(r.completed, r.incubated),
         "delay_rate": _ratio(r.delayed, r.active),
         "avg_progress": round(float(r.avg_progress), 1) if r.avg_progress is not None else None,

@@ -235,3 +235,14 @@ def test_projet_avec_responsable(client, coordo, db):
     assert client.put(f"/api/projects/{r.json()['id']}", headers=coordo,
                       json={"responsible_id": 999999}).status_code == 422
     assert client.get("/api/responsables", headers=coordo).json()[0]["full_name"]
+
+
+def test_taux_selection_non_calculable_sur_perimetre_post_selection(db):
+    """Filtrer par performance ne garde que des projets sélectionnés : le taux serait de 100 % par construction."""
+    from app.services import kpi
+    assert kpi.compute_kpis(db, kpi.Filters())["selection_rate"] is not None
+    for f in (kpi.Filters(performance_levels=["Faible"]), kpi.Filters(funding_levels=["Non financé"]),
+              kpi.Filters(statuses=["En incubation"]), kpi.Filters(responsible_ids=[1])):
+        assert kpi.compute_kpis(db, f)["selection_rate"] is None
+    # Les filtres de cohorte et de domaine laissent le taux calculable
+    assert kpi.selection_rate_applicable(kpi.Filters(cohort_ids=[1], domain_ids=[1]))

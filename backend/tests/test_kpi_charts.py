@@ -42,7 +42,8 @@ def _attendu(db, cohort_ids=None, domain_ids=None, statuses=None, d1=None, d2=No
         "delayed": len(retard),
         "funding_received": sum(f.amount_received for f in fin),
         "funding_granted": sum(f.amount_granted for f in fin),
-        "selection_rate": round(acc / (acc + rej), 4) if acc + rej else None,
+        # Un filtre de statut ne garde que des dossiers d'un statut donné : taux non calculable (dénominateur biaisé)
+        "selection_rate": round(acc / (acc + rej), 4) if acc + rej and not statuses else None,
         "completion_rate": round(sum(1 for p, _ in lignes if p.status == "Terminé") / incubes, 4) if incubes else None,
         "delay_rate": round(len(retard) / len(actifs), 4) if actifs else None,
         "avg_progress": round(sum(p.progress_pct for p in actifs) / len(actifs), 1) if actifs else None,
