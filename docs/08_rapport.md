@@ -1,7 +1,7 @@
 # CIAT VISION – Rapport de projet
 
-**Plateforme intelligente de pilotage et d'analyse décisionnelle du CIAT**
-ISEP Amadou Trawaré de Diamniadio · Évaluation pratique en intelligence artificielle générative · Projet 3
+**Plateforme intelligente de pilotage et d'analyse décisionnelle du CIAT**  
+ISEP Amadou Trawaré de Diamniadio · Évaluation pratique en intelligence artificielle générative · Projet 3  
 Année académique 2026-2027
 
 ---
@@ -180,8 +180,9 @@ navigateurs récents, que React prenait pour une fonction de nettoyage. Elle a �
 similaires ont été harmonisés. Dix anomalies ont été consignées avec leur cause, leur correction et leur
 vérification.
 
-Performances mesurées en local (269 dossiers) : indicateurs du tableau de bord en 41 ms (médiane), séries de tous
-les graphiques en 165 ms, rapport PDF global en 0,6 s, soit nettement sous les cibles du cahier des charges.
+Performances mesurées sur une base de **1 030 projets**, la volumétrie de la cible : tableau de bord complet affiché
+dans le navigateur en 1,0 à 1,8 s (cible : < 2 s), indicateurs en 38 ms, rapport PDF le plus lourd (1 030 lignes)
+en 4,8 s (cible : < 10 s).
 
 ## 9. Limites et perspectives
 
@@ -189,7 +190,7 @@ les graphiques en 165 ms, rapport PDF global en 0,6 s, soit nettement sous les c
 |---|---|
 | Données réelles indisponibles : les chiffres présentés sont simulés | Importer les données du CIAT (procédure documentée) et valider les définitions des KPI avec la direction |
 | Mode IA non évalué avec le modèle réel | Constituer un jeu de 20 questions de référence et vérifier chaque chiffre cité (critère § 16.2) |
-| Performances mesurées sur 269 dossiers | Test de charge sur 1 000 projets et plus |
+| Performances mesurées en local, sur 1 030 projets | Les mesurer sur l'hébergement définitif ; paginer le rapport PDF des projets au-delà de quelques milliers de lignes |
 | Logo provisoire | Remplacer les fichiers par le logo officiel (aucune modification du code) |
 | Offres d'hébergement gratuites (mise en veille, durée de vie de la base) | Hébergement institutionnel ou offre payante, sauvegardes planifiées |
 | Réalisation individuelle d'un sujet prévu pour trois | Organisation à valider avec l'enseignant |

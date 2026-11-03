@@ -11,7 +11,7 @@ Les diagrammes sont écrits en Mermaid : ils s'affichent directement dans GitHub
 ## 1. Vue d'ensemble
 
 ```mermaid
-flowchart LR
+flowchart TB
     subgraph Client["Navigateur (ordinateur, tablette, téléphone)"]
         SPA["Application React + TypeScript<br/>Vite · Tailwind · Recharts · Lucide"]
     end
@@ -82,35 +82,47 @@ CIAT_VISION/
 
 ## 3. Diagramme de cas d'utilisation
 
+Les acteurs sont liés par **héritage** : le coordonnateur peut faire tout ce que fait l'analyste, et
+l'administrateur tout ce que fait le coordonnateur. Chaque acteur n'est donc relié qu'aux cas qui lui sont propres.
+
 ```mermaid
 flowchart LR
-    AN(["👤 Analyste"])
-    CO(["👤 Coordonnateur"])
-    AD(["👤 Administrateur"])
+    AN["👤 Analyste"]
+    CO["👤 Coordonnateur du CIAT"]
+    AD["👤 Administrateur"]
+    AD -. "hérite de" .-> CO -. "hérite de" .-> AN
 
-    subgraph S["CIAT VISION"]
-        UC1(("Se connecter / gérer son profil"))
-        UC2(("Consulter le tableau de bord et filtrer"))
-        UC3(("Analyser les performances"))
-        UC4(("Consulter projets, cohortes, financements"))
-        UC5(("Interroger l'assistant IA"))
-        UC6(("Générer un rapport PDF / Excel / CSV"))
-        UC7(("Créer, modifier, supprimer un projet"))
-        UC8(("Changer le statut, suivre la progression et les jalons"))
-        UC9(("Gérer cohortes, candidatures, évaluations, financements"))
-        UC10(("Importer des données Excel / CSV"))
-        UC11(("Gérer les utilisateurs et les rôles"))
-        UC12(("Gérer les paramètres"))
-        UC13(("Consulter le journal d'audit"))
-        UC14(("Purger les données simulées / restaurer un projet"))
+    subgraph C["Consultation et analyse"]
+        direction TB
+        UC1(["Se connecter, gérer son profil"])
+        UC2(["Consulter le tableau de bord, filtrer"])
+        UC3(["Analyser les performances"])
+        UC4(["Consulter projets, cohortes, financements"])
+        UC5(["Interroger CIAT AI Analyst"])
+        UC6(["Générer un rapport PDF / Excel / CSV"])
     end
-
-    AN --- UC1 & UC2 & UC3 & UC4 & UC5 & UC6
-    CO --- UC1 & UC2 & UC3 & UC4 & UC5 & UC6 & UC7 & UC8 & UC9 & UC10
-    AD --- UC1 & UC2 & UC3 & UC4 & UC5 & UC6 & UC7 & UC8 & UC9 & UC10 & UC11 & UC12 & UC13 & UC14
+    subgraph G["Gestion des données"]
+        direction TB
+        UC7(["Créer, modifier, supprimer un projet"])
+        UC8(["Changer le statut, suivre jalons et progression"])
+        UC9(["Gérer cohortes, évaluations, financements"])
+        UC10(["Importer un fichier Excel / CSV"])
+    end
+    subgraph M["Administration"]
+        direction TB
+        UC11(["Gérer les comptes et les rôles"])
+        UC12(["Gérer les paramètres"])
+        UC13(["Consulter le journal d'audit"])
+        UC14(["Purger les données simulées, restaurer un projet"])
+    end
+    %% liens invisibles : empilent les cas d'utilisation en colonne
+    UC1 ~~~ UC2 ~~~ UC3 ~~~ UC4 ~~~ UC5 ~~~ UC6
+    UC7 ~~~ UC8 ~~~ UC9 ~~~ UC10
+    UC11 ~~~ UC12 ~~~ UC13 ~~~ UC14
+    AN --> C
+    CO --> G
+    AD --> M
 ```
-
----
 
 ## 4. Diagramme de classes (modèle métier)
 

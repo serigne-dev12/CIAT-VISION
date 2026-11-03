@@ -49,6 +49,10 @@ cd frontend && npm test            # 8 tests
 | 3, 4 | Application et code source | `backend/`, `frontend/` |
 | 10 | Déploiement | [render.yaml](render.yaml) |
 
+**Versions PDF** de tous les livrables (diagrammes dessinés, prêtes pour la remise) : [docs/pdf/](docs/pdf/).
+Pour les régénérer après une modification : `python scripts/generer_pdf_livrables.py` (voir l'en-tête du script).
+Test de charge reproductible (1 000 projets) : `backend/scripts/mesurer_performances.py`.
+
 ## Structure
 ```
 backend/   API FastAPI : app/ (modèles, routes, services), alembic/ (migrations), tests/

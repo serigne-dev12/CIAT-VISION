@@ -41,20 +41,29 @@ cd frontend && npm run lint              # contrôle de types
 
 ## 3. Performances mesurées
 
-Mesures locales (PostgreSQL 16, 269 dossiers simulés, 20 répétitions) :
+Mesures locales sur PostgreSQL 16, avec une base dédiée peuplée de **1 030 projets simulés**, soit la volumétrie de la
+cible du cahier des charges (§ 8.1). L'API a été appelée 20 fois par opération. Script reproductible :
+`backend/scripts/mesurer_performances.py`.
 
-| Opération | Médiane | 95e centile | Cible (§ 8.1) |
-|---|---:|---:|---|
-| Indicateurs du tableau de bord | 41 ms | 48 ms | < 500 ms ✅ |
-| Indicateurs filtrés par cohorte | 48 ms | 55 ms | < 500 ms ✅ |
-| Séries de tous les graphiques d'analyse | 165 ms | 189 ms | < 500 ms ✅ |
-| Liste des projets (page de 20) | 99 ms | 114 ms | < 500 ms ✅ |
-| Question à l'assistant (mode dégradé) | 85 ms | 86 ms | < 30 s ✅ |
-| Rapport PDF global | 600 ms | — | < 10 s ✅ |
-| Rapport Excel des projets | 325 ms | — | < 10 s ✅ |
+| Opération | Médiane | 95e centile | Cible | Résultat |
+|---|---:|---:|---|:-:|
+| **Tableau de bord complet affiché dans le navigateur** (Edge, 5 chargements) | 1,18 s | 1,80 s (max.) | < 2 s | ✅ |
+| Page Analyses complète (12 graphiques) dans le navigateur | 1,05 s | — | < 2 s | ✅ |
+| Indicateurs du tableau de bord (API) | 38 ms | 44 ms | < 500 ms | ✅ |
+| Indicateurs filtrés par cohorte | 36 ms | 42 ms | < 500 ms | ✅ |
+| Séries de tous les graphiques d'analyse | 126 ms | 136 ms | < 500 ms | ✅ |
+| Liste des projets (page de 20) | 89 ms | 107 ms | < 500 ms | ✅ |
+| Recherche plein texte de projets | 83 ms | 89 ms | < 500 ms | ✅ |
+| Projets en retard | 154 ms | 171 ms | < 500 ms | ✅ |
+| Liste et synthèse des financements | 101 ms | 111 ms | < 500 ms | ✅ |
+| Assistant, projets à surveiller (mode dégradé) | 82 ms | 93 ms | < 30 s | ✅ |
+| Rapport PDF global | 0,45 s | — | < 10 s | ✅ |
+| Rapport PDF des projets (1 030 lignes, le cas le plus lourd) | 4,8 s | — | < 10 s | ✅ |
+| Rapport Excel des projets | 0,44 s | — | < 10 s | ✅ |
 
-Limite : la cible du cahier des charges porte sur 1 000 projets ; elle n'a pas été mesurée à cette volumétrie.
-Le temps de réponse de l'assistant en mode IA dépend du service Claude et n'a pas pu être mesuré sans clé d'API.
+Limites : mesures sur un poste local. Sur l'offre gratuite de Render, le serveur est moins puissant et le premier
+appel après une mise en veille est lent. Le temps de réponse de l'assistant en mode IA dépend du service Claude et
+n'a pas pu être mesuré sans clé d'API.
 
 ## 4. Journal des anomalies
 

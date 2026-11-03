@@ -74,3 +74,29 @@ sans ambiguïté.
 **Ce qui reste à faire par le réalisateur :** fournir le logo officiel CIAT VISION ; créer le dépôt GitHub et
 déployer sur Render (procédure dans `docs/06_guide_installation.md` § 5) ; tester le mode IA avec une clé d'API ;
 enregistrer la vidéo (`docs/09_scenario_video.md`) ; faire valider la réalisation individuelle par l'enseignant.
+
+---
+
+## Entrée 3 – Compléments : test de charge et livrables PDF
+
+**Date :** 03/11/2026
+**Outil :** Claude Code (Claude Opus 5.5)
+
+**Prompt :** « continue ».
+
+**Résultats obtenus :**
+- **Test de charge à la volumétrie de la cible (1 030 projets)**, sur une base dédiée : tableau de bord affiché en
+  1,0 à 1,8 s dans le navigateur (cible < 2 s) ; API des indicateurs en 38 ms ; rapport PDF de 1 030 lignes en 4,8 s
+  (cible < 10 s). Script reproductible `backend/scripts/mesurer_performances.py` ; résultats dans
+  `docs/05_tests_et_anomalies.md` § 3 et dans le rapport.
+- **Versions PDF des 10 livrables** (`docs/pdf/`), avec couverture, pagination et diagrammes Mermaid dessinés ;
+  script `scripts/generer_pdf_livrables.py`. Le rapport compte 7 pages (exigence : 5 à 10).
+
+**Corrections apportées :**
+- Diagramme de cas d'utilisation illisible dans le PDF (bulles géantes, flèches croisées sur deux pages) → refait
+  avec des groupes de cas et un héritage entre acteurs ; il tient sur une page.
+- Vue d'ensemble trop petite → orientation verticale.
+- Noms de tables minuscules dans les titres du dictionnaire → style corrigé.
+
+**Non réalisable sans le réalisateur :** publication sur GitHub (l'outil `gh` n'est pas installé et la création
+d'un dépôt se fait avec le compte du réalisateur), déploiement Render, clé d'API Claude, logo officiel, vidéo.
