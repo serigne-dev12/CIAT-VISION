@@ -15,7 +15,7 @@
 | **Réalisateur** | Étudiant en informatique – Analyse de performance digitale |
 | **Année académique** | 2026-2027 |
 | **Version** | 1.2 – voir § 20 « Historique des versions » |
-| **Statut** | Validé (points V1 à V5 acceptés ; V6 et V7 en attente d'éléments externes) |
+| **Statut** | Validé (points V1 à V6 acceptés ; V7 en attente de l'enseignant) |
 
 ---
 
@@ -414,7 +414,7 @@ même couleur dans tous les graphiques). Fonds blancs, grilles discrètes.
 ### 9.4. Logo
 Le logo **CIAT VISION fourni par le réalisateur** est utilisé sans déformation, en trois versions : horizontale
 (en-tête), compacte (barre latérale repliée), page de connexion. Aucun logo officiel de l'ISEP n'est créé ni
-imité. *Le fichier du logo reste à fournir (voir § 19).*
+imité. *Logo officiel fourni et intégré (v1.2).*
 
 ### 9.5. Style
 Interface de type logiciel SaaS institutionnel : barre latérale, cartes à coins arrondis (8 px) et ombres
@@ -628,7 +628,7 @@ consignées dans un journal (description, cause, correction, vérification).
 | V3 ✅ | Définition d'un projet en retard | Date limite dépassée **ou** jalon en retard, seuil de tolérance paramétrable (§ 7.1) |
 | V4 ✅ | Montant total des financements | Somme des montants **reçus**, avec le montant accordé affiché à côté (§ 7.2) |
 | V5 ✅ | Fournisseur d'IA | API Claude (Anthropic) avec appel d'outils ; mode dégradé sans clé |
-| V6 ⏳ | Logo CIAT VISION | Fichier à fournir ; logo provisoire en place, remplaçable sans modifier le code (guide d'installation § 8) |
+| V6 ✅ | Logo CIAT VISION | Logo officiel fourni et intégré (en-tête, barre latérale, connexion, PDF) |
 | V7 ⏳ | Réalisation individuelle | À confirmer auprès de l'enseignant |
 
 ---

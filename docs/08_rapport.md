@@ -191,7 +191,6 @@ en 4,8 s (cible : < 10 s).
 | Données réelles indisponibles : les chiffres présentés sont simulés | Importer les données du CIAT (procédure documentée) et valider les définitions des KPI avec la direction |
 | Mode IA non évalué avec le modèle réel | Constituer un jeu de 20 questions de référence et vérifier chaque chiffre cité (critère § 16.2) |
 | Performances mesurées en local, sur 1 030 projets | Les mesurer sur l'hébergement définitif ; paginer le rapport PDF des projets au-delà de quelques milliers de lignes |
-| Logo provisoire | Remplacer les fichiers par le logo officiel (aucune modification du code) |
 | Offres d'hébergement gratuites (mise en veille, durée de vie de la base) | Hébergement institutionnel ou offre payante, sauvegardes planifiées |
 | Réalisation individuelle d'un sujet prévu pour trois | Organisation à valider avec l'enseignant |
 

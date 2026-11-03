@@ -24,16 +24,19 @@ simulées. Elles garantissent que ce qui est présenté au jury correspond exact
 
 ## 2. Logo
 
-Le logo **fourni par le réalisateur** doit remplacer les trois fichiers provisoires, sans modification du code :
+Le **logo officiel CIAT VISION** fourni par le réalisateur est utilisé sans aucune déformation ni recoloration :
+les trois versions sont de simples recadrages de l'original (`docs/logo/ciat_vision_logo_original.png`), avec
+proportions conservées.
 
 | Version | Fichier | Usage |
 |---|---|---|
-| Horizontale (fond sombre) | `frontend/public/logo/horizontal.svg` | Barre latérale, page de connexion (panneau gauche) |
-| Compacte | `frontend/public/logo/compact.svg` | Barre latérale repliée, en-tête téléphone, icône d'onglet |
-| Page de connexion (fond clair) | `frontend/public/logo/login.svg` | Formulaire de connexion |
-| PDF | `backend/app/assets/logo.png` (facultatif) | En-tête des rapports PDF |
+| Horizontale (emblème + « CIAT VISION ») | `frontend/public/logo/logo-horizontal.png` | Barre latérale, menu mobile, panneau de la page de connexion |
+| Compacte (emblème seul) | `frontend/public/logo/logo-compact.png`, `favicon.png` | Barre latérale repliée, en-tête téléphone, icône d'onglet |
+| Complète (avec « ISEP AMADOU TRAWARÉ ») | `frontend/public/logo/logo-complet.png` | Formulaire de connexion |
+| PDF | `backend/app/assets/logo.png` | En-tête de tous les rapports PDF |
 
-Les logos actuels sont **provisoires** (pictogramme de barres + texte) et n'imitent aucun logo officiel de l'ISEP.
+Le logo étant conçu sur fond clair (texte marron foncé), il est posé sur un **cartouche blanc à coins arrondis**
+lorsqu'il apparaît sur la barre latérale marron ou sur l'en-tête marron des PDF, pour rester lisible.
 
 ## 3. Écrans
 

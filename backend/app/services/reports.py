@@ -46,7 +46,7 @@ STATUS_COLORS = {s: SERIES[i % len(SERIES)] for i, s in enumerate(
 STATUS_COLORS.update({"Non retenu": colors.HexColor("#B9B4AE"), "Terminé": colors.HexColor("#1BAF7A"),
                       "Suspendu": colors.HexColor("#E34948")})
 
-LOGO_FILE = Path(__file__).resolve().parent.parent / "assets" / "logo.png"
+LOGO_FILE = Path(__file__).resolve().parent.parent / "assets" / "logo.png"  # logo officiel CIAT VISION
 
 TITRES = {
     "global": "Rapport global des activités",
@@ -347,8 +347,11 @@ def render_pdf(r: Report) -> bytes:
         canvas.setFillColor(BRUN)
         canvas.rect(0, A4[1] - 20 * mm, A4[0], 20 * mm, stroke=0, fill=1)
         if LOGO_FILE.exists():
-            canvas.drawImage(str(LOGO_FILE), 16 * mm, A4[1] - 16.5 * mm, height=13 * mm, width=45 * mm,
-                             preserveAspectRatio=True, mask="auto")
+            # Logo officiel (fond clair) posé sur un cartouche blanc, proportions conservées
+            canvas.setFillColor(colors.white)
+            canvas.roundRect(13 * mm, A4[1] - 18.5 * mm, 42 * mm, 17 * mm, 2 * mm, stroke=0, fill=1)
+            canvas.drawImage(str(LOGO_FILE), 14.5 * mm, A4[1] - 17.5 * mm, width=39 * mm, height=15 * mm,
+                             preserveAspectRatio=True, anchor="c", mask="auto")
         else:
             draw_logo(180, 36, on_dark=True).drawOn(canvas, 16 * mm, A4[1] - 16.5 * mm)
         canvas.setFillColor(colors.white)

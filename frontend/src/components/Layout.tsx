@@ -50,9 +50,10 @@ export default function Layout() {
     <div className="flex min-h-full">
       {/* Barre latérale (ordinateur) */}
       <aside className={`sticky top-0 hidden h-screen shrink-0 flex-col bg-brun transition-[width] duration-200 lg:flex ${replie ? "w-[72px]" : "w-64"}`}>
-        <Link to="/" className="flex h-16 items-center border-b border-white/10 px-4" aria-label="CIAT VISION – accueil">
-          {replie ? <img src="/logo/compact.svg" alt="CIAT VISION" className="size-9" />
-            : <img src="/logo/horizontal.svg" alt="CIAT VISION" className="h-10" />}
+        {/* Logo officiel sur cartouche blanc : conçu sur fond clair, il n'est jamais recoloré ni déformé */}
+        <Link to="/" className={`flex h-16 items-center border-b border-white/10 ${replie ? "justify-center px-2" : "px-3"}`} aria-label="CIAT VISION – accueil">
+          {replie ? <img src="/logo/logo-compact.png" alt="CIAT VISION" className="size-11 rounded-md bg-white object-contain p-0.5" />
+            : <span className="flex h-12 w-full items-center justify-center rounded-md bg-white px-2"><img src="/logo/logo-horizontal.png" alt="CIAT VISION" className="h-11 w-auto object-contain" /></span>}
         </Link>
         {nav(replie)}
         <button onClick={() => setReplie(!replie)} className="m-2 flex items-center justify-center gap-2 rounded-md px-3 py-2 text-xs text-white/70 hover:bg-white/5"
@@ -66,8 +67,8 @@ export default function Layout() {
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-profond/50" onClick={() => setMobile(false)} />
           <aside className="animate-apparition absolute inset-y-0 left-0 flex w-72 flex-col bg-brun">
-            <div className="flex h-16 items-center justify-between border-b border-white/10 px-4">
-              <img src="/logo/horizontal.svg" alt="CIAT VISION" className="h-9" />
+            <div className="flex h-20 items-center justify-between border-b border-white/10 px-4">
+              <span className="flex h-12 items-center rounded-md bg-white px-2"><img src="/logo/logo-horizontal.png" alt="CIAT VISION" className="h-10 w-auto object-contain" /></span>
               <button onClick={() => setMobile(false)} className="rounded p-1 text-white" aria-label="Fermer le menu"><X className="size-5" /></button>
             </div>
             {nav(false)}
@@ -78,7 +79,7 @@ export default function Layout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-ligne bg-white/95 px-4 backdrop-blur sm:px-6">
           <button className="rounded p-1.5 text-profond lg:hidden" onClick={() => setMobile(true)} aria-label="Ouvrir le menu"><Menu className="size-6" /></button>
-          <img src="/logo/compact.svg" alt="" className="size-8 lg:hidden" />
+          <img src="/logo/logo-compact.png" alt="" className="size-10 object-contain lg:hidden" />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-profond">CIAT VISION</p>
             <p className="hidden truncate text-xs text-muted sm:block">{meta?.institution ?? "ISEP Amadou Trawaré de Diamniadio"} · Centre d'Innovation, d'Application et de Transfert</p>

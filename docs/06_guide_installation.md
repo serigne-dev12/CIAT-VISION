@@ -124,11 +124,11 @@ pg_dump --format=custom --file=ciat_vision_$(date +%F).dump "$DATABASE_URL"
 pg_restore --clean --if-exists --dbname="$DATABASE_URL" ciat_vision_AAAA-MM-JJ.dump
 ```
 
-## 8. Remplacer le logo provisoire
+## 8. Logo
 
-Déposer les versions du logo officiel CIAT VISION aux emplacements suivants (mêmes noms de fichiers) :
-`frontend/public/logo/horizontal.svg`, `compact.svg`, `login.svg`, et `backend/app/assets/logo.png` pour les PDF.
-Aucune modification du code n'est nécessaire ; reconstruire le frontend (`npm run build`).
+Le logo officiel est intégré (versions décrites dans `docs/04_maquettes.md` § 2). Pour le changer plus tard,
+remplacer les fichiers de `frontend/public/logo/` et `backend/app/assets/logo.png` en gardant les mêmes noms,
+puis reconstruire le frontend (`npm run build`). Aucune modification du code n'est nécessaire.
 
 ## 9. Sécurité en production – liste de contrôle
 

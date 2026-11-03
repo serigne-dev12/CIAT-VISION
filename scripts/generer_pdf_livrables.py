@@ -21,6 +21,7 @@ RACINE = Path(__file__).resolve().parent.parent
 DOCS = RACINE / "docs"
 SORTIE = DOCS / "pdf"
 CANAL = "msedge"
+LOGO = RACINE / "frontend" / "public" / "logo" / "logo-complet.png"
 MERMAID = "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"
 
 LIVRABLES = [
@@ -64,6 +65,7 @@ td img { max-height: 210mm; }
 .couverture h1 { border: none; font-size: 28pt; margin: 0; }
 .couverture .sous { font-size: 14pt; color: #6B625B; }
 .couverture .bas { color: #6B625B; font-size: 10pt; }
+.couverture img.logo { width: 120mm; border: none; margin: 0 auto; display: block; }
 """
 
 
@@ -85,6 +87,7 @@ def convertir(md_text: str) -> str:
 def page_html(titre: str, corps: str) -> str:
     couverture = f"""<section class="couverture">
       <div class="bande"><b>CIAT VISION</b> · Le pilotage intelligent de l'innovation par la donnée</div>
+      <img class="logo" src="{LOGO.as_uri()}" alt="CIAT VISION">
       <div><p class="sous">Plateforme intelligente de pilotage et d'analyse décisionnelle du CIAT</p>
         <h1>{titre}</h1></div>
       <div class="bas">ISEP Amadou Trawaré de Diamniadio · Centre d'Innovation, d'Application et de Transfert<br>

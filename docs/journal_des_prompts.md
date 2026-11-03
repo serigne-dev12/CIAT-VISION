@@ -100,3 +100,22 @@ enregistrer la vidéo (`docs/09_scenario_video.md`) ; faire valider la réalisat
 
 **Non réalisable sans le réalisateur :** publication sur GitHub (l'outil `gh` n'est pas installé et la création
 d'un dépôt se fait avec le compte du réalisateur), déploiement Render, clé d'API Claude, logo officiel, vidéo.
+
+---
+
+## Entrée 4 – Publication GitHub et intégration du logo officiel
+
+**Date :** 03/11/2026
+**Outil :** Claude Code (Claude Opus 5.5)
+
+**Prompts :** « nom compte github est serigne-dev12 », puis envoi de l'image du logo officiel CIAT VISION.
+
+**Résultats obtenus :**
+- Dépôt **public** créé et code publié : https://github.com/serigne-dev12/CIAT-VISION (choix du réalisateur : public,
+  nom « CIAT-VISION »).
+- Avant publication, le mot de passe du PostgreSQL local a été retiré du code de test **et de l'historique Git** ;
+  il est désormais lu dans `backend/.env` (non publié).
+- Version de Node.js fixée dans `render.yaml` (Vite 8 exige Node 20.19+).
+- Logo officiel intégré sans déformation : versions horizontale, compacte et complète obtenues par recadrage de
+  l'original ; posé sur un cartouche blanc sur les fonds marron (barre latérale, en-tête des PDF) ; icône d'onglet ;
+  couverture des PDF des livrables. Maquettes recapturées.
