@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.constants import DEFAULT_MILESTONES, TRANSITIONS, ApplicationStatus, FundingStatus, ProjectStatus
 from app.models import (Application, Cohort, Domain, Funding, Milestone, Partner, Project, ProjectLeader,
-                        ProjectStatusHistory, User)
+                        ProjectStatusHistory, Responsable, User)
 
 
 def http_error(message: str, code: int = 422) -> HTTPException:
@@ -41,9 +41,15 @@ def check_duplicate_name(db: Session, name: str, cohort_id: int, exclude_id: int
         raise http_error("Un projet portant ce nom existe déjà dans cette cohorte.", status.HTTP_409_CONFLICT)
 
 
+def check_responsible(db: Session, responsible_id: int | None) -> None:
+    if responsible_id is not None and db.get(Responsable, responsible_id) is None:
+        raise http_error("Responsable de suivi inconnu.")
+
+
 def create_project(db: Session, data, user: User) -> Project:
     """Crée le porteur (si nouveau), la candidature (« Reçue ») et le projet (« En attente »)."""
     check_references(db, data.domain_id, data.cohort_id)
+    check_responsible(db, data.responsible_id)
     check_duplicate_name(db, data.name, data.cohort_id)
     submitted = data.submitted_at or date.today()
     if data.deadline and data.deadline <= submitted:
@@ -66,7 +72,8 @@ def create_project(db: Session, data, user: User) -> Project:
     db.flush()
     p = Project(application_id=app_.id, name=data.name.strip(), description=data.description, leader_id=leader.id,
                 domain_id=data.domain_id, cohort_id=data.cohort_id, status=ProjectStatus.PENDING, progress_pct=0,
-                planned_budget=data.planned_budget, deadline=data.deadline)
+                planned_budget=data.planned_budget, deadline=data.deadline,
+                responsible_id=data.responsible_id)
     db.add(p)
     db.flush()
     db.add(ProjectStatusHistory(project_id=p.id, old_status=None, new_status=p.status, changed_by=user.id,

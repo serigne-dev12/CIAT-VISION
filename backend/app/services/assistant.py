@@ -1,12 +1,13 @@
-"""CIAT AI Analyst : assistant d'interrogation des données en langage naturel (cahier des charges § 6.7).
+"""CIAT AI Analyst : assistant d'aide à la décision en langage naturel (cahier des charges § 6.7, V2).
 
-Mode IA : le modèle Claude reçoit la question et la liste des fonctions d'analyse autorisées. Il demande
-l'exécution de fonctions ; le backend les exécute (paramètres validés) et lui renvoie les résultats ; il rédige
-la réponse à partir de ces seuls résultats.
+Mode IA : le modèle Claude reçoit la question, les filtres actifs du tableau de bord et la liste des fonctions
+d'analyse autorisées. Il demande l'exécution de fonctions ; le backend les exécute (paramètres validés) et lui
+renvoie les résultats ; il rédige une réponse en trois niveaux (diagnostic, explication, recommandations) à partir
+de ces seuls résultats.
 
 Mode dégradé (pas de clé d'API, IA désactivée ou service indisponible) : reconnaissance de mots-clés qui appelle
-directement la fonction d'analyse correspondante. Aucune rédaction libre : les chiffres sont mis en forme par
-des gabarits.
+directement la fonction d'analyse correspondante, avec les filtres actifs. Les trois niveaux sont produits par des
+gabarits : aucun texte libre, aucun chiffre qui ne vienne d'une fonction d'analyse.
 """
 from __future__ import annotations
 
@@ -30,29 +31,30 @@ MAX_TOURS = 6
 MENTION_SIMULEES = ("⚠️ Ces résultats proviennent de **données simulées** : ils ne constituent pas des "
                     "statistiques officielles du CIAT.")
 
-SYSTEM_PROMPT = """Tu es CIAT AI Analyst, l'assistant d'analyse de la plateforme CIAT VISION du Centre \
-d'Innovation, d'Application et de Transfert (CIAT) de l'ISEP Amadou Trawaré de Diamniadio (Sénégal). \
-Tu réponds en français aux responsables du CIAT.
+SYSTEM_PROMPT = """Tu es CIAT AI Analyst, l'assistant d'aide à la décision de la plateforme CIAT VISION du Centre \
+d'Innovation, d'Application et de Transfert (CIAT) de l'ISEP Amadou Trawaré de Diamniadio (Sénégal). Tu réponds en \
+français aux responsables du CIAT.
 
 Tu n'as accès aux données QUE par les fonctions d'analyse fournies. Méthode :
 1. Identifie les données nécessaires et appelle la ou les fonctions adaptées (plusieurs appels possibles).
-2. Rédige ta réponse UNIQUEMENT à partir des résultats renvoyés. Chaque chiffre que tu cites doit figurer \
-dans un résultat de fonction. N'invente jamais un chiffre, une tendance ou un nom de projet.
-3. Si la question porte sur une information qu'aucune fonction ne fournit (chiffre d'affaires, satisfaction, \
-données personnelles des porteurs…), dis clairement que l'information n'est pas disponible dans la plateforme.
-4. Si une fonction renvoie une erreur, corrige les paramètres (noms exacts du référentiel) et réessaie.
+2. Rédige ta réponse UNIQUEMENT à partir des résultats renvoyés. Chaque chiffre que tu cites doit figurer dans un \
+résultat de fonction. N'invente jamais un chiffre, une tendance ou un nom de projet.
+3. Si l'information n'est fournie par aucune fonction (chiffre d'affaires, satisfaction, données personnelles des \
+porteurs…) ou si les données sont insuffisantes pour conclure, dis-le clairement.
 
-Format de la réponse :
-- d'abord la réponse directe en une ou deux phrases ;
-- puis 2 à 5 puces « Chiffres utilisés » (avec le périmètre) ;
-- si la question le demande, une section « Recommandations » : des propositions à examiner par la direction, \
-clairement distinguées des constats ;
-- termine par « Limites : » en une phrase (périmètre, définition utilisée, données manquantes).
+Structure OBLIGATOIRE de la réponse, en trois niveaux :
+**Diagnostic** – la situation en 1 à 3 phrases, avec les chiffres utiles.
+**Explication** – les facteurs OBSERVABLES dans les résultats. Distingue explicitement les faits (« Constat : ») \
+des hypothèses (« Hypothèse : », à vérifier sur le terrain).
+**Recommandations** – 2 à 4 actions concrètes, présentées comme des propositions à examiner par la direction.
+Termine par une ligne « Période et indicateurs : » qui indique la période analysée, le périmètre (filtres) et les \
+définitions des indicateurs utilisés, et rappelle les limites éventuelles.
 Montants en FCFA avec des espaces (12 500 000 FCFA), taux avec une décimale. Pas de tableaux Markdown.
-{simulees}
+{simulees}{filtres}
 Référentiel (noms exacts à utiliser dans les filtres) :
 - Cohortes : {cohortes}
 - Domaines : {domaines}
+- Responsables de suivi : {responsables}
 - Statuts : {statuts}
 Date du jour : {aujourdhui}."""
 
@@ -80,12 +82,19 @@ def _client():
 client_factory = _client
 
 
-def _system(db: Session) -> str:
+def _system(db: Session, actifs: kpi.Filters | None = None) -> str:
     ref = analysis.reference_data(db)
+    bloc_filtres = ""
+    if actifs is not None and not actifs.is_empty():
+        bloc_filtres = (
+            "\nFILTRES ACTIFS du tableau de bord de l'utilisateur : " + actifs.describe(db) + ".\nQuand la question "
+            "ne précise pas de périmètre, applique ces filtres dans les fonctions (paramètre « filtres » : "
+            + json.dumps(analysis.filtres_vers_noms(db, actifs), ensure_ascii=False) + ") et rappelle-le.")
     return SYSTEM_PROMPT.format(
-        simulees=("IMPORTANT : la base contient des DONNÉES SIMULÉES ; rappelle-le dans « Limites »."
+        simulees=("IMPORTANT : la base contient des DONNÉES SIMULÉES ; rappelle-le dans la dernière ligne."
                   if has_simulated_data(db) else ""),
-        cohortes=", ".join(ref["cohortes"]), domaines=", ".join(ref["domaines"]), statuts=", ".join(ref["statuts"]),
+        filtres=bloc_filtres, cohortes=", ".join(ref["cohortes"]), domaines=", ".join(ref["domaines"]),
+        responsables=", ".join(ref["responsables"]) or "aucun", statuts=", ".join(ref["statuts"]),
         aujourdhui=date.today().isoformat())
 
 
@@ -96,14 +105,14 @@ def _execute(db: Session, name: str, args: Any) -> tuple[dict | None, str | None
         return None, str(e)
 
 
-def ask_ai(db: Session, question: str, history: list[dict]) -> dict:
+def ask_ai(db: Session, question: str, history: list[dict], actifs: kpi.Filters | None = None) -> dict:
     """Boucle d'appel d'outils avec Claude. Renvoie {answer, tools, mode}."""
     client = client_factory()
     messages: list[dict] = []
     for h in history[-4:]:  # contexte léger : uniquement le texte des derniers échanges
         messages += [{"role": "user", "content": h["question"]}, {"role": "assistant", "content": h["answer"]}]
     messages.append({"role": "user", "content": question})
-    system = _system(db)
+    system = _system(db, actifs)
     trace: list[dict] = []
 
     for _ in range(MAX_TOURS):
@@ -146,99 +155,183 @@ def _fmt(n) -> str:
     return f"{int(n):,}".replace(",", " ")
 
 
-def _route(q: str) -> tuple[str, dict] | None:
+def _route(q: str, filtres: dict | None) -> tuple[str, dict] | None:
+    """Associe une question à une fonction d'analyse (mots-clés). Les filtres actifs sont appliqués."""
     q = _norm(q)
-    if any(m in q for m in ("attention", "surveiller", "risque", "difficult", "recommand", "ameliorer", "alerte")):
-        return "projets_a_surveiller", {"limite": 10}
+    if "cette annee" in q or "annee en cours" in q:
+        an = date.today().year
+        vides = {"cohortes": None, "domaines": None, "statuts": None, "responsables": None}
+        filtres = {**(filtres or vides), "date_debut": f"{an}-01-01", "date_fin": f"{an}-12-31"}
+    if any(m in q for m in ("performant", "meilleurs projets", "plus avances", "top")):
+        return "classement_projets", {"ordre": "meilleurs", "filtres": filtres, "limite": 10}
+    if "alerte" in q:
+        return "alertes_actives", {"niveau": None, "limite": 15}
+    if "objectif" in q:
+        return "suivi_objectifs", {}
+    if any(m in q for m in ("intervention", "attention", "surveiller", "difficult", "risque", "recommand",
+                            "action", "ameliorer")):
+        return "analyse_risques", {"filtres": filtres, "limite": 10}
     if "retard" in q:
-        return "projets_en_retard", {"filtres": None, "limite": 10}
+        return "projets_en_retard", {"filtres": filtres, "limite": 10}
+    if "domaine" in q and any(m in q for m in ("meilleur", "resultat", "performan", "compar")):
+        return "comparer", {"dimension": "domaine", "elements": None, "filtres": filtres}
+    if "responsable" in q:
+        return "comparer", {"dimension": "responsable", "elements": None, "filtres": filtres}
     if "cohorte" in q and any(m in q for m in ("meilleur", "compar", "resultat", "performan", "classement")):
         return "comparer_cohortes", {"cohortes": None}
+    if any(m in q for m in ("evolu", "par mois", "mensuel")) and any(m in q for m in ("financ", "montant", "fcfa")):
+        return "synthese_financements", {"regroupement": "mois", "filtres": filtres}
     if any(m in q for m in ("financ", "montant", "fcfa", "argent", "budget", "bailleur", "source")):
-        return "synthese_financements", {"regroupement": "source", "filtres": None}
+        return "synthese_financements", {"regroupement": "source", "filtres": filtres}
     if any(m in q for m in ("domaine", "secteur")):
-        return "repartition_projets", {"dimension": "domaine", "filtres": None}
+        return "repartition_projets", {"dimension": "domaine", "filtres": filtres}
     if "statut" in q:
-        return "repartition_projets", {"dimension": "statut", "filtres": None}
+        return "repartition_projets", {"dimension": "statut", "filtres": filtres}
     if any(m in q for m in ("candidature", "mensuel", "evolution", "par mois")):
-        return "evolution_candidatures", {"filtres": None}
+        return "evolution_candidatures", {"filtres": filtres}
     if "cohorte" in q:
         return "comparer_cohortes", {"cohortes": None}
     if any(m in q for m in ("combien", "nombre", "total", "taux", "indicateur", "kpi", "reussite", "achevement",
-                            "incub", "prototype", "termine", "selection", "progression")):
-        return "indicateurs_cles", {"filtres": None}
+                            "incub", "prototype", "termine", "selection", "progression", "situation", "bilan")):
+        return "indicateurs_cles", {"filtres": filtres}
     return None
 
 
-def _template(name: str, r: dict) -> str:
+def _pct(v) -> str:
+    return "non calculable" if v is None else f"{v * 100:.1f} %".replace(".", ",")
+
+
+def _trois_niveaux(name: str, r: dict) -> tuple[str, str, str]:
+    """(diagnostic, explication, recommandations) à partir des seuls résultats de la fonction."""
     d = r["donnees"]
     if name == "indicateurs_cles":
-        cles = ["Total des projets", "Candidatures reçues", "Projets sélectionnés", "Projets en incubation",
-                "Prototypes réalisés", "Projets terminés", "Projets en retard", "Taux de sélection",
-                "Taux d'achèvement", "Taux de retard", "Progression moyenne", "Financements reçus"]
-        return "Indicateurs clés :\n" + "\n".join(f"- {c} : {d[c]['affichage']}" for c in cles if c in d)
-    if name == "projets_en_retard":
-        lignes = [f"- {p['name']} ({p['domain']}, {p['cohort']}) : {p['days_late']} jours de retard, "
-                  f"progression {p['progress_pct']} %" for p in d["projets"]]
-        return f"{d['nombre_total_en_retard']} projet(s) en retard. Les plus importants :\n" + "\n".join(lignes)
-    if name == "comparer_cohortes":
+        v = lambda c: d[c]["affichage"]  # noqa: E731
+        diag = (f"{v('Total des projets')} projets ({v('Projets actifs')} actifs, {v('Projets terminés')} terminés, "
+                f"{v('Projets en retard')} en retard) pour {v('Candidatures reçues')} candidatures.")
+        achevement = v("Taux d'achèvement")
+        expl = (f"Constat : taux de sélection {v('Taux de sélection')}, taux d'achèvement {achevement}, "
+                f"taux de retard {v('Taux de retard')}, progression moyenne {v('Progression moyenne')}, "
+                f"{v('Prototypes réalisés')} prototypes, {v('Financements reçus')} reçus.")
+        reco = ("Suivre en priorité les projets en retard (page Alertes) ; comparer les domaines et les cohortes pour "
+                "repérer où se concentrent les difficultés.")
+    elif name == "projets_en_retard":
+        lignes = [f"{p['name']} ({p['domain']}) : {p['days_late']} jours, progression {p['progress_pct']} %"
+                  for p in d["projets"]]
+        diag = f"{d['nombre_total_en_retard']} projet(s) actif(s) en retard."
+        expl = "Constat : les retards les plus importants — " + ("; ".join(lignes) if lignes else "aucun") + "."
+        reco = ("Programmer un point de suivi avec chaque porteur concerné et réviser les jalons irréalistes ; "
+                "examiner en comité les retards de plus de 90 jours.")
+    elif name in ("comparer", "comparer_cohortes"):
         if not d:
-            return "Aucune cohorte avec des données."
+            return "Aucune donnée sur ce périmètre.", "Données insuffisantes pour comparer.", "Élargir les filtres."
+        cle = "element" if name == "comparer" else "cohorte"
         ach = "Taux d'achèvement"
 
-        def taux(c: dict) -> float:
-            return -1.0 if c[ach] == "non calculable" else float(c[ach].split()[0].replace(",", "."))
-
-        meilleure = max(d, key=taux)
-        lignes = [f"- {c['cohorte']} : achèvement {c[ach]}, retard {c['Taux de retard']}, progression moyenne "
-                  f"{c['Progression moyenne']}, financements reçus {c['Financements reçus']}" for c in d]
-        return (f"Meilleur taux d'achèvement : {meilleure['cohorte']}.\n" + "\n".join(lignes))
-    if name == "synthese_financements":
+        def taux(x):
+            return -1.0 if x[ach] == "non calculable" else float(x[ach].split()[0].replace(",", "."))
+        meilleur = max(d, key=taux)
+        diag = f"Meilleur taux d'achèvement : {meilleur[cle]} ({meilleur[ach]})."
+        expl = "Constat : " + " ; ".join(f"{x[cle]} – achèvement {x[ach]}, retard {x['Taux de retard']}, "
+                                          f"progression {x['Progression moyenne']}" for x in d) + (
+            ". Hypothèse : une cohorte en cours a mécaniquement un taux d'achèvement faible.")
+        reco = "Analyser les pratiques du meilleur élément et les diffuser ; accompagner en priorité les moins avancés."
+    elif name == "synthese_financements":
         t = d["totaux"]
-        lignes = [f"- {x['label']} : {_fmt(x['granted'])} FCFA accordés, {_fmt(x['received'])} FCFA reçus"
-                  for x in d["detail_montants_fcfa"]]
-        return ("Financements :\n" + "\n".join(f"- {k} : {v}" for k, v in t.items())
-                + "\n\nPar source :\n" + "\n".join(lignes))
-    if name == "repartition_projets":
+        diag = f"{t['Financements accordés']} accordés, dont {t['Financements reçus']} reçus."
+        detail = d["detail_montants_fcfa"]
+        if detail and "month" in detail[0]:
+            expl = "Constat (par mois de demande) : " + " ; ".join(
+                f"{x['month']} : {_fmt(x['granted'])} accordés" for x in detail[-6:]) + "."
+        else:
+            expl = "Constat : " + " ; ".join(f"{x['label']} : {_fmt(x['granted'])} FCFA accordés" for x in detail) + \
+                   f". Reste à recevoir {t['Reste à recevoir']} ; besoin non couvert {t['Besoin non couvert']}."
+        reco = "Relancer les bailleurs pour les montants accordés non versés ; orienter les projets sous-financés vers " \
+               "de nouveaux partenaires."
+    elif name == "classement_projets":
+        lignes = [f"{p['projet']} ({p['statut']}, {p['progression_pct']} %"
+                  + (f", écart {p['ecart_points']:+} pts" if p["ecart_points"] is not None else "") + ")"
+                  for p in d["projets"]]
+        diag = f"{d['nombre_total']} projet(s) classé(s) selon leur niveau de performance."
+        expl = "Constat : " + "; ".join(lignes) + ". " + r.get("methode", "")
+        reco = "Valoriser les projets les plus avancés (vitrine, investisseurs) et partager leurs pratiques."
+    elif name in ("analyse_risques", "projets_a_surveiller"):
+        projets = d["projets"]
+        if name == "analyse_risques":
+            diag = (f"{d['nombre_projets_evalues']} projets évalués : {d['par_niveau']['Élevé']} à risque élevé, "
+                    f"{d['par_niveau']['Modéré']} modéré, {d['par_niveau']['Faible']} faible.")
+            freq = "; ".join(f"{x['facteur']} ({x['projets']} projets)" for x in d["facteurs_frequents"][:4])
+            expl = f"Constat : facteurs les plus fréquents — {freq}. Projets prioritaires — " + "; ".join(
+                f"{p['projet']} (score {p['score']})" for p in projets[:5]) + "."
+        else:
+            diag = f"{d['nombre_total']} projet(s) nécessitent une intervention (risque élevé ou modéré)."
+            expl = "Constat : " + "; ".join(f"{p['projet']} : " + ", ".join(p["motifs"][:2]) for p in projets[:5]) + "."
+        expl += " Hypothèse : les causes réelles (techniques, financières, personnelles) restent à vérifier avec les " \
+                "porteurs."
+        reco = ("1. Réunir le comité de suivi sur les projets à risque élevé et fixer un plan d'action daté. "
+                "2. Mettre à jour les fiches sans mise à jour récente. 3. Orienter les projets sous-financés vers les "
+                "partenaires financiers.")
+    elif name == "alertes_actives":
+        diag = f"{d['nombre_total']} alerte(s) active(s) : " + ", ".join(f"{k} {v}" for k, v in d["par_niveau"].items()) \
+            + "."
+        expl = "Constat : " + "; ".join(f"{k} : {v}" for k, v in d["par_type"].items()) + "."
+        reco = "Traiter d'abord les alertes critiques (page Alertes) en suivant l'action recommandée de chacune."
+    elif name == "suivi_objectifs":
+        diag = f"{len(d)} objectif(s) suivi(s) : " + ", ".join(
+            f"{o['status']} ({sum(1 for x in d if x['status'] == o['status'])})"
+            for o in {x['status']: x for x in d}.values()) + "."
+        expl = "Constat : " + "; ".join(
+            f"{o['label']} – {o['current']:,.0f} / {o['target']:,.0f} ({o['status']})".replace(",", " ") for o in d) + "."
+        reco = "Réexaminer en comité les objectifs en retard : moyens supplémentaires ou cible révisée."
+    elif name == "repartition_projets":
         lignes = []
         for x in d:
             if "domain" in x:
-                lignes.append(f"- {x['domain']} : {x['projects']} projets ({x['applications']} candidatures)")
+                lignes.append(f"{x['domain']} : {x['projects']} projets")
             elif "status" in x:
-                lignes.append(f"- {x['status']} : {x['count']}")
+                lignes.append(f"{x['status']} : {x['count']}")
             elif "cohorte" in x:
-                lignes.append(f"- {x['cohorte']} : {x['projets']} projets")
-        return "Répartition :\n" + "\n".join(lignes)
-    if name == "projets_a_surveiller":
-        lignes = [f"- {p['projet']} ({p['domaine']}) : " + " ; ".join(p["motifs"]) for p in d["projets"]]
-        return (f"{d['nombre_total']} projet(s) actif(s) présentent au moins un signal d'alerte. Priorités :\n"
-                + "\n".join(lignes)
-                + "\n\nPistes : programmer un point de suivi avec les projets en retard, réviser les jalons "
-                  "irréalistes et orienter les projets sous-financés vers les partenaires financiers.")
-    if name == "evolution_candidatures":
-        lignes = [f"- {x['month']} : {x['received']} reçues, {x['accepted']} acceptées, {x['rejected']} rejetées"
-                  for x in d]
-        return "Candidatures par mois de dépôt :\n" + "\n".join(lignes)
-    return json.dumps(d, ensure_ascii=False)[:2000]
+                lignes.append(f"{x['cohorte']} : {x['projets']} projets")
+            elif "level" in x:
+                lignes.append(f"{x['level']} : {x['count']}")
+        diag = "Répartition : " + "; ".join(lignes[:4]) + ("…" if len(lignes) > 4 else ".")
+        expl = "Constat : " + "; ".join(lignes) + "."
+        reco = "Comparer ensuite les performances par domaine pour savoir si la taille d'un domaine va avec ses résultats."
+    elif name == "evolution_candidatures":
+        diag = f"{sum(x['received'] for x in d)} candidatures sur {len(d)} mois de dépôt."
+        expl = "Constat : " + "; ".join(f"{x['month']} : {x['received']} reçues, {x['accepted']} acceptées"
+                                        for x in d[-6:]) + "."
+        reco = "Anticiper les campagnes d'appel à candidatures sur les mois de forte affluence."
+    else:
+        return "Résultat disponible.", json.dumps(d, ensure_ascii=False)[:1500], "—"
+    return diag, expl, reco
 
 
-def ask_degraded(db: Session, question: str, reason: str) -> dict:
-    route = _route(question)
+def ask_degraded(db: Session, question: str, reason: str, actifs: kpi.Filters | None = None) -> dict:
+    filtres = analysis.filtres_vers_noms(db, actifs) if actifs is not None and not actifs.is_empty() else None
+    route = _route(question, filtres)
     if route is None:
         return {"answer": (f"{reason}\n\nJe n'ai pas reconnu la question. Je peux répondre sur : les indicateurs "
-                           "clés, les projets en retard, la comparaison des cohortes, les financements, la "
-                           "répartition par domaine ou par statut, l'évolution des candidatures et les projets "
-                           "nécessitant une attention particulière."), "tools": [], "mode": "dégradé"}
+                           "clés, les projets les plus performants, les projets en retard ou nécessitant une "
+                           "intervention, les risques, les alertes, les objectifs, la comparaison des domaines, "
+                           "cohortes ou responsables, les financements et leur évolution, l'évolution des "
+                           "candidatures."), "tools": [], "mode": "dégradé"}
     name, args = route
     out, err = _execute(db, name, args)
-    texte = _template(name, out) if out else f"Erreur : {err}"
-    return {"answer": f"{reason}\n\n{texte}\n\nLimites : réponse automatique sans IA générative, "
-                      f"périmètre « {out['perimetre'] if out else '—'} ».",
-            "tools": [{"name": name, "arguments": args, "result": out, "error": err}], "mode": "dégradé"}
+    if err:
+        return {"answer": f"{reason}\n\nErreur : {err}", "tools": [{"name": name, "arguments": args, "result": None,
+                                                                    "error": err}], "mode": "dégradé"}
+    diag, expl, reco = _trois_niveaux(name, out)
+    defs = "; ".join(f"{k} = {v}" for k, v in list(out.get("definitions", {}).items())[:4])
+    texte = (f"{reason}\n\n**Diagnostic** – {diag}\n\n**Explication** – {expl}\n\n**Recommandations** – {reco}\n\n"
+             f"Période et indicateurs : {out['periode_analysee']} ; périmètre « {out['perimetre']} »"
+             + (f" ; définitions : {defs}" if defs else "")
+             + ". Réponse automatique sans IA générative (gabarits appliqués aux résultats des fonctions d'analyse).")
+    return {"answer": texte, "tools": [{"name": name, "arguments": args, "result": out, "error": None}],
+            "mode": "dégradé"}
 
 
 # ------------------------------------------------------------------ point d'entrée
-def ask(db: Session, user: User, question: str) -> dict:
+def ask(db: Session, user: User, question: str, actifs: kpi.Filters | None = None) -> dict:
     limite = get_int_setting(db, "ai_daily_limit")
     if questions_today(db, user) >= limite:
         return {"answer": f"Limite quotidienne de {limite} questions atteinte. Réessayez demain.", "tools": [],
@@ -249,15 +342,17 @@ def ask(db: Session, user: User, question: str) -> dict:
 
     if ai_available(db):
         try:
-            res = ask_ai(db, question, history)
+            res = ask_ai(db, question, history, actifs)
         except Exception as e:  # réseau, quota, clé invalide… → on reste utile en mode dégradé
             log.warning("Assistant IA indisponible : %s", e)
             res = ask_degraded(db, question, "ℹ️ Le service d'IA est momentanément indisponible : réponse en "
-                                             "mode dégradé.")
+                                             "mode dégradé.", actifs)
     else:
-        res = ask_degraded(db, question, "ℹ️ Mode dégradé : l'IA générative n'est pas configurée sur ce serveur.")
+        res = ask_degraded(db, question, "ℹ️ Mode dégradé : l'IA générative n'est pas configurée sur ce serveur.",
+                           actifs)
 
     res["simulated"] = has_simulated_data(db)
+    res["filters"] = actifs.describe(db) if actifs is not None and not actifs.is_empty() else None
     if res["simulated"] and MENTION_SIMULEES not in res["answer"]:
         res["answer"] = f"{res['answer']}\n\n{MENTION_SIMULEES}"
 

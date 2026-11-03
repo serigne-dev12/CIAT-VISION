@@ -1,6 +1,8 @@
 """Module 6 – Suivi des financements."""
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -28,6 +30,11 @@ def _out(x: Funding) -> dict:
 @router.get("")
 def list_fundings(f: kpi.Filters = Depends(filters_dep), q: str = Query("", max_length=100),
                   source: str | None = None, funding_status: str | None = Query(None, alias="funding_status"),
+                  partner_id: int | None = None,
+                  request_start: date | None = Query(None, description="Demandes à partir de cette date"),
+                  request_end: date | None = Query(None, description="Demandes jusqu'à cette date"),
+                  amount_min: int | None = Query(None, ge=0, description="Montant demandé minimum (FCFA)"),
+                  amount_max: int | None = Query(None, ge=0, description="Montant demandé maximum (FCFA)"),
                   page: int = Query(1, ge=1), page_size: int = Query(25, ge=1, le=200),
                   db: Session = Depends(get_db), _: User = Depends(any_user)):
     conds = f.conditions()
@@ -37,6 +44,20 @@ def list_fundings(f: kpi.Filters = Depends(filters_dep), q: str = Query("", max_
         conds.append(Funding.source_type == source)
     if funding_status:
         conds.append(Funding.status == funding_status)
+    if partner_id:
+        conds.append(Funding.partner_id == partner_id)
+    if request_start and request_end and request_end < request_start:
+        raise HTTPException(422, "La fin de période doit être postérieure au début.")
+    if request_start:
+        conds.append(Funding.request_date >= request_start)
+    if request_end:
+        conds.append(Funding.request_date <= request_end)
+    if amount_min is not None and amount_max is not None and amount_max < amount_min:
+        raise HTTPException(422, "Le montant maximum doit être supérieur au montant minimum.")
+    if amount_min is not None:
+        conds.append(Funding.amount_requested >= amount_min)
+    if amount_max is not None:
+        conds.append(Funding.amount_requested <= amount_max)
     base = (select(Funding).join(Project, Project.id == Funding.project_id)
             .join(Application, Application.id == Project.application_id)
             .outerjoin(Partner, Partner.id == Funding.partner_id).where(*conds))

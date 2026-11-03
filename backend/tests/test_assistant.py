@@ -36,34 +36,67 @@ def test_resultats_identiques_au_tableau_de_bord(client, analyste, db):
 def test_toutes_les_fonctions_s_executent(db):
     appels = {
         "indicateurs_cles": {"filtres": None},
-        "repartition_projets": {"dimension": "domaine", "filtres": None},
+        "repartition_projets": {"dimension": "performance", "filtres": None},
         "projets_en_retard": {"filtres": None, "limite": 5},
         "comparer_cohortes": {"cohortes": None},
-        "synthese_financements": {"regroupement": "source", "filtres": None},
+        "comparer": {"dimension": "responsable", "elements": None, "filtres": None},
+        "synthese_financements": {"regroupement": "mois", "filtres": None},
+        "classement_projets": {"ordre": "meilleurs", "filtres": None, "limite": 5},
+        "analyse_risques": {"filtres": None, "limite": 5},
         "projets_a_surveiller": {"limite": 5},
+        "alertes_actives": {"niveau": "Critique", "limite": 5},
+        "suivi_objectifs": {},
         "evolution_candidatures": {"filtres": None},
     }
-    assert set(appels) == analysis.TOOL_NAMES
+    assert set(appels) == analysis.TOOL_NAMES and len(appels) == 12
     for nom, args in appels.items():
-        assert analysis.run(db, nom, args)["donnees"] is not None
+        r = analysis.run(db, nom, args)
+        assert r["donnees"] is not None and "periode_analysee" in r and "perimetre" in r
 
 
+# Les 8 questions du prompt V2 (§ 8) et la fonction attendue en mode dégradé
 @pytest.mark.parametrize("question, fonction", [
+    ("Quels sont les projets les plus performants ?", "classement_projets"),
+    ("Quels projets sont en retard ?", "projets_en_retard"),
+    ("Quel domaine présente les meilleurs résultats ?", "comparer"),
+    ("Quel est le taux d'achèvement cette année ?", "indicateurs_cles"),
+    ("Quels projets nécessitent une intervention ?", "analyse_risques"),
+    ("Comment évoluent les financements ?", "synthese_financements"),
+    ("Quelles sont les principales difficultés ?", "analyse_risques"),
+    ("Quelles actions recommandes-tu ?", "analyse_risques"),
     ("Combien de projets avons-nous enregistrés ?", "indicateurs_cles"),
-    ("Quel domaine possède le plus de projets ?", "repartition_projets"),
-    ("Combien de projets sont actuellement en retard ?", "projets_en_retard"),
     ("Quelle cohorte présente les meilleurs résultats ?", "comparer_cohortes"),
-    ("Quel est le montant total des financements ?", "synthese_financements"),
-    ("Quel est le taux de réussite des projets ?", "indicateurs_cles"),
-    ("Quels projets nécessitent une attention particulière ?", "projets_a_surveiller"),
-    ("Quelles recommandations peut-on proposer pour améliorer les performances ?", "projets_a_surveiller"),
+    ("Où en sont nos objectifs ?", "suivi_objectifs"),
+    ("Quelles sont les alertes critiques ?", "alertes_actives"),
 ])
-def test_mode_degrade_questions_du_cahier_des_charges(client, analyste, question, fonction):
+def test_mode_degrade_questions(client, analyste, question, fonction):
     r = client.post("/api/assistant/ask", headers=analyste, json={"question": question})
     assert r.status_code == 200
     body = r.json()
-    assert body["mode"] == "dégradé" and body["tools"][0]["name"] == fonction
-    assert "données simulées" in body["answer"] and "Limites" in body["answer"]
+    assert body["mode"] == "dégradé" and body["tools"][0]["name"] == fonction, body["answer"][:300]
+    # Trois niveaux d'analyse + période et indicateurs + mention des données simulées
+    for marque in ("**Diagnostic**", "**Explication**", "**Recommandations**", "Période et indicateurs"):
+        assert marque in body["answer"]
+    assert "données simulées" in body["answer"]
+
+
+def test_taux_achevement_cette_annee_applique_la_periode(client, analyste):
+    from datetime import date
+    body = client.post("/api/assistant/ask", headers=analyste,
+                       json={"question": "Quel est le taux d'achèvement cette année ?"}).json()
+    filtres = body["tools"][0]["arguments"]["filtres"]
+    assert filtres["date_debut"] == f"{date.today().year}-01-01"
+
+
+def test_filtres_actifs_pris_en_compte(client, analyste, db):
+    from sqlalchemy import select
+    from app.models import Cohort
+    c = db.scalars(select(Cohort).order_by(Cohort.year)).first()
+    body = client.post("/api/assistant/ask", headers=analyste, json={
+        "question": "Combien de projets avons-nous enregistrés ?", "filters": {"cohort_ids": [c.id]}}).json()
+    assert body["filters"] and c.name in body["filters"]
+    assert body["tools"][0]["arguments"]["filtres"]["cohortes"] == [c.name]
+    assert c.name in body["tools"][0]["result"]["perimetre"]
 
 
 def test_question_hors_perimetre(client, analyste):
@@ -86,7 +119,7 @@ class _FauxClaude:
         resultat = kw["messages"][-1]["content"][0]["content"]
         assert "Cohorte" in resultat  # le modèle reçoit bien les vrais résultats
         return SimpleNamespace(stop_reason="end_turn",
-                               content=[SimpleNamespace(type="text", text="La meilleure cohorte est… Limites : test.")])
+                               content=[SimpleNamespace(type="text", text="**Diagnostic** – … Limites : test.")])
 
 
 def test_boucle_ia_avec_client_simule(db, monkeypatch):
@@ -107,7 +140,7 @@ def test_ia_erreur_de_fonction_renvoyee_au_modele(db, monkeypatch):
             if len(self.appels) == 1:
                 b = SimpleNamespace(type="tool_use", id="t1", name="indicateurs_cles",
                                     input={"filtres": {"cohortes": ["Cohorte 1800"], "domaines": None, "statuts": None,
-                                                       "date_debut": None, "date_fin": None}})
+                                                       "responsables": None, "date_debut": None, "date_fin": None}})
                 return SimpleNamespace(stop_reason="tool_use", content=[b])
             retour = kw["messages"][-1]["content"][0]
             assert retour["is_error"] is True and "inconnu" in retour["content"]
@@ -120,3 +153,16 @@ def test_ia_erreur_de_fonction_renvoyee_au_modele(db, monkeypatch):
 def test_historique(client, analyste):
     h = client.get("/api/assistant/history", headers=analyste).json()
     assert h and all(x["user"] == "analyste" for x in h)
+
+
+def test_systeme_ia_contient_les_filtres_actifs(db, monkeypatch):
+    from app.services import kpi
+    from sqlalchemy import select
+    from app.models import Domain
+    d = db.scalars(select(Domain)).first()
+    faux = _FauxClaude()
+    monkeypatch.setattr(svc, "client_factory", lambda: faux)
+    svc.ask_ai(db, "Quelle cohorte présente les meilleurs résultats ?", [], kpi.Filters(domain_ids=[d.id]))
+    systeme = faux.appels[0]["system"]
+    assert "FILTRES ACTIFS" in systeme and d.name in systeme
+    assert "**Diagnostic**" in systeme and "Hypothèse" in systeme

@@ -19,7 +19,8 @@ from sqlalchemy.orm import Session
 
 from app.constants import (FUNDING_SOURCES, GENDERS, LEADER_PROFILES, PROJECT_STATUSES, ApplicationStatus,
                            FundingStatus, ProjectStatus)
-from app.models import Application, Cohort, Domain, Funding, ImportBatch, Partner, Project, ProjectLeader, User
+from app.models import (Application, Cohort, Domain, Funding, ImportBatch, Partner, Project, ProjectLeader, Responsable,
+                        User)
 from app.services.common import audit
 
 MAX_BYTES = 5 * 1024 * 1024
@@ -52,6 +53,7 @@ ENTITIES: dict[str, list[Col]] = {
         Col("progression", False, "int", example="40"),
         Col("budget_previsionnel", False, "int", example="5000000"),
         Col("date_limite", False, "date", example="2026-12-15"),
+        Col("responsable", False, "responsable", example="Nom d'un responsable de suivi existant"),
     ],
     "fundings": [
         Col("nom_projet", True, example="Application de suivi des cultures"),
@@ -164,6 +166,7 @@ def validate(db: Session, entity: str, raw_rows: list[dict]) -> tuple[list[str],
         return missing, []
 
     domains = {_norm(n): i for i, n in db.execute(select(Domain.id, Domain.name)).all()}
+    responsables = {_norm(n): i for i, n in db.execute(select(Responsable.id, Responsable.full_name)).all()}
     cohorts = {_norm(n): i for i, n in db.execute(select(Cohort.id, Cohort.name)).all()}
     choice_maps = {c.name: {_norm(x): x for x in c.choices} for c in cols if c.choices}
     results: list[RowResult] = []
@@ -193,6 +196,10 @@ def validate(db: Session, entity: str, raw_rows: list[dict]) -> tuple[list[str],
                     val = domains.get(_norm(v))
                     if val is None:
                         raise ValueError(f"domaine « {v} » inconnu")
+                elif c.kind == "responsable":
+                    val = responsables.get(_norm(v))
+                    if val is None:
+                        raise ValueError(f"responsable « {v} » inconnu (créez-le d'abord)")
                 elif c.kind == "cohort":
                     val = cohorts.get(_norm(v))
                     if val is None:
@@ -306,7 +313,8 @@ def commit(db: Session, entity: str, results: list[RowResult], user: User, filen
             db.add(Project(application_id=app_.id, name=d["nom_projet"], description=d["description"],
                            leader_id=leader.id, domain_id=d["domaine"], cohort_id=d["cohorte"], status=st.value,
                            progress_pct=100 if st == ProjectStatus.COMPLETED else (d["progression"] or 0),
-                           planned_budget=d["budget_previsionnel"] or 0, deadline=d["date_limite"]))
+                           planned_budget=d["budget_previsionnel"] or 0, deadline=d["date_limite"],
+                           responsible_id=d.get("responsable")))
         elif entity == "fundings":
             partner_id = None
             if d.get("partenaire"):
@@ -327,7 +335,11 @@ def commit(db: Session, entity: str, results: list[RowResult], user: User, filen
     db.add(ImportBatch(user_id=user.id, entity=entity, filename=filename[:200], rows_imported=len(valides),
                        rows_skipped=ignorees))
     audit(db, user, "IMPORT", entity, None, f"{filename} : {len(valides)} ligne(s) importée(s), {ignorees} ignorée(s)")
-    return {"imported": len(valides), "skipped": ignorees}
+    # Rapport final : le sort de chaque ligne du fichier, avec le motif des lignes ignorées
+    rapport = [{"line": r.line, "status": "Importée" if r.valid else "Ignorée",
+                "reason": "" if r.valid else " ; ".join([*r.errors, *([r.duplicate] if r.duplicate else [])])}
+               for r in results]
+    return {"imported": len(valides), "skipped": ignorees, "report": rapport}
 
 
 # ------------------------------------------------------------------ modèles de fichiers
@@ -348,7 +360,8 @@ def template(entity: str, fmt: str) -> tuple[bytes, str, str]:
     aide.append(["Colonne", "Obligatoire", "Format / valeurs autorisées"])
     for c in cols:
         fmt_txt = {"date": "Date AAAA-MM-JJ ou JJ/MM/AAAA", "int": "Nombre entier positif", "email": "Adresse e-mail",
-                   "domain": "Nom exact d'un domaine existant", "cohort": "Nom exact d'une cohorte existante"}.get(
+                   "domain": "Nom exact d'un domaine existant", "cohort": "Nom exact d'une cohorte existante",
+                   "responsable": "Nom exact d'un responsable de suivi existant"}.get(
             c.kind, ", ".join(c.choices) if c.choices else "Texte")
         aide.append([c.name, "Oui" if c.required else "Non", fmt_txt])
     for sh in (ws, aide):

@@ -28,8 +28,8 @@ from reportlab.platypus import (KeepTogether, Paragraph, SimpleDocTemplate, Spac
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Funding, Project
-from app.services import kpi
+from app.models import Alert, Funding, Project
+from app.services import kpi, risks
 from app.services.common import get_setting, has_simulated_data
 
 BRUN = colors.HexColor("#4C311F")
@@ -49,10 +49,13 @@ STATUS_COLORS.update({"Non retenu": colors.HexColor("#B9B4AE"), "Terminé": colo
 LOGO_FILE = Path(__file__).resolve().parent.parent / "assets" / "logo.png"  # logo officiel CIAT VISION
 
 TITRES = {
-    "global": "Rapport global des activités",
+    "global": "Rapport général du CIAT",
+    "domains": "Rapport par domaine",
+    "project": "Rapport par projet",
+    "alerts": "Rapport des alertes",
     "projects": "Rapport des projets",
     "cohorts": "Rapport des cohortes",
-    "fundings": "Rapport des financements",
+    "fundings": "Rapport financier",
     "performance": "Rapport des performances",
     "delays": "Rapport des retards",
 }
@@ -67,6 +70,9 @@ KPIS_PAR_RAPPORT = {
                  "uncovered_need", "avg_funding"],
     "performance": ["selection_rate", "completion_rate", "delay_rate", "avg_progress", "prototypes", "completed"],
     "delays": ["active", "delayed", "delay_rate", "suspended", "avg_progress"],
+    "domains": ["total_projects", "completion_rate", "delay_rate", "avg_progress", "funding_granted", "prototypes"],
+    "alerts": ["active", "delayed", "delay_rate", "suspended"],
+    "project": [],  # le rapport par projet présente une fiche détaillée à la place des indicateurs agrégés
 }
 
 
@@ -110,7 +116,10 @@ def _pct(v) -> str:
 
 
 # ------------------------------------------------------------------ collecte des données
-def build_report(db: Session, report_type: str, f: kpi.Filters, commentary: str | None = None) -> Report:
+def build_report(db: Session, report_type: str, f: kpi.Filters, commentary: str | None = None,
+                 project_id: int | None = None) -> Report:
+    if report_type == "project":
+        return _rapport_projet(db, project_id, commentary)
     k = kpi.compute_kpis(db, f)
     r = Report(type=report_type, title=TITRES[report_type], perimetre=f.describe(db), kpis=k,
                kpi_keys=KPIS_PAR_RAPPORT[report_type], commentary=commentary, simulated=has_simulated_data(db),
@@ -141,6 +150,23 @@ def build_report(db: Session, report_type: str, f: kpi.Filters, commentary: str 
                            "—" if c["avg_progress"] is None else c["avg_progress"],
                            "—" if c["avg_funding"] is None else c["avg_funding"]] for c in comp]), comp
 
+    def risques_table(limit: int | None = None) -> TableData:
+        a = risks.analyser(db, f)
+        lignes = [[e["name"], e["status"], e["progress_pct"], e["score"], e["level"],
+                   " ; ".join(x["libelle"] for x in e["factors"])] for e in a["projets"][:limit]]
+        return TableData("Analyse des risques" + (f" (les {limit} scores les plus élevés)" if limit else "")
+                         + " – règles transparentes, pas une prédiction",
+                         ["Projet", "Statut", "Progression (%)", "Score /100", "Niveau", "Raisons"], lignes,
+                         [26, 12, 8, 7, 8, 39])
+
+    def domaines_table() -> TableData:
+        return TableData("Performances par domaine",
+                         ["Domaine", "Projets", "Taux d'achèvement", "Taux de retard", "Progression moy. (%)",
+                          "Financement obtenu (FCFA)", "Prototypes"],
+                         [[g["label"], g["total_projects"], _pct(g["completion_rate"]), _pct(g["delay_rate"]),
+                           "—" if g["avg_progress"] is None else g["avg_progress"], g["funding_granted"], g["prototypes"]]
+                          for g in kpi.group_kpis(db, f, "domain")], [26, 8, 11, 11, 11, 16, 9])
+
     def retards_table(limit: int | None = None) -> TableData:
         d = kpi.delayed_projects(db, f, limit=limit, include_leader=True)
         return TableData("Projets en retard" + (f" (les {limit} plus importants)" if limit else ""),
@@ -162,7 +188,7 @@ def build_report(db: Session, report_type: str, f: kpi.Filters, commentary: str 
         r.charts += [pie_status, bar_domain,
                      Chart("line", "Évolution mensuelle des candidatures", [m["month"] for m in monthly],
                            [("Reçues", [m["received"] for m in monthly]), ("Acceptées", [m["accepted"] for m in monthly])])]
-        r.tables += [cohortes_table()[0], retards_table(10)]
+        r.tables += [cohortes_table()[0], retards_table(10), risques_table(10)]
     elif report_type == "projects":
         r.charts += [pie_status, bar_domain]
         r.tables.append(projets_table())
@@ -202,7 +228,36 @@ def build_report(db: Session, report_type: str, f: kpi.Filters, commentary: str 
                             ("Retard", [round((c["delay_rate"] or 0) * 100, 1) for c in comp])]),
                      Chart("hbar", "Projets terminés par domaine", [d["domain"] for d in domains],
                            [("Terminés", [d["completed"] for d in domains])])]
+        r.tables += [t, domaines_table(), risques_table(15)]
+    elif report_type == "domains":
+        t = domaines_table()
+        noms = [row[0] for row in t.rows]
+        groupes = kpi.group_kpis(db, f, "domain")
+        r.charts += [Chart("hbar", "Taux d'achèvement par domaine (%)", noms,
+                           [("Achèvement", [round((g["completion_rate"] or 0) * 100, 1) for g in groupes])]),
+                     Chart("hbar", "Taux de retard par domaine (%)", noms,
+                           [("Retard", [round((g["delay_rate"] or 0) * 100, 1) for g in groupes])]),
+                     Chart("hbar", "Financement obtenu par domaine (millions FCFA)", noms,
+                           [("Accordé", [round(g["funding_granted"] / 1e6, 1) for g in groupes])])]
         r.tables.append(t)
+    elif report_type == "alerts":
+        ids = set(db.scalars(select(Project.id).join(Project.application).where(*f.conditions())))
+        alertes = [a for a in db.scalars(select(Alert).where(Alert.resolved_at.is_(None), Alert.archived_at.is_(None)))
+                   if (a.project_id in ids) or (a.project_id is None and f.is_empty())]
+        ordre = {n: i for i, n in enumerate(["Critique", "Élevé", "Moyen", "Information"])}
+        alertes.sort(key=lambda a: (ordre.get(a.level, 9), a.type))
+        niveaux = ["Critique", "Élevé", "Moyen", "Information"]
+        types: dict[str, int] = {}
+        for a in alertes:
+            types[a.type] = types.get(a.type, 0) + 1
+        r.charts += [Chart("bar", "Alertes actives par niveau", niveaux,
+                           [("Alertes", [sum(1 for a in alertes if a.level == n) for n in niveaux])]),
+                     Chart("hbar", "Alertes actives par type", list(types), [("Alertes", list(types.values()))])]
+        r.tables.append(TableData("Alertes actives", ["Niveau", "Type", "Objet", "Problème détecté",
+                                                      "Action recommandée", "Détectée le"],
+                                  [[a.level, a.type, a.project.name if a.project else "Objectif",
+                                    a.problem, a.recommended_action, f"{a.detected_at:%d/%m/%Y}"] for a in alertes],
+                                  [8, 13, 20, 26, 25, 8]))
     elif report_type == "delays":
         t = retards_table()
         par_domaine: dict[str, int] = {}
@@ -211,6 +266,59 @@ def build_report(db: Session, report_type: str, f: kpi.Filters, commentary: str 
         r.charts.append(Chart("hbar", "Projets en retard par domaine", list(par_domaine),
                               [("En retard", list(par_domaine.values()))]))
         r.tables.append(t)
+    return r
+
+
+def _rapport_projet(db: Session, project_id: int | None, commentary: str | None) -> Report:
+    from datetime import date as _date
+
+    from fastapi import HTTPException
+
+    p = db.get(Project, project_id) if project_id else None
+    if p is None or p.is_archived:
+        raise HTTPException(422, "Choisissez un projet existant pour le rapport par projet.")
+    today = _date.today()
+    granted = sum(x.amount_granted for x in p.fundings)
+    received = sum(x.amount_received for x in p.fundings)
+    requested = sum(x.amount_requested for x in p.fundings)
+    attendu = risks.progression_attendue(p, today)
+    evaluation = next((e for e in risks.analyser(db, kpi.Filters())["projets"] if e["project_id"] == p.id), None)
+    r = Report(type="project", title=f"Rapport du projet : {p.name}", perimetre=f"Projet n° {p.id} – {p.cohort.name}",
+               kpis={}, kpi_keys=[], commentary=commentary, simulated=p.is_simulated or has_simulated_data(db),
+               institution=get_setting(db, "institution_name"))
+    fiche = [
+        ["Porteur", p.leader.full_name], ["Domaine", p.domain.name], ["Cohorte", p.cohort.name],
+        ["Responsable de suivi", p.responsible.full_name if p.responsible else "Non renseigné"],
+        ["Statut", p.status], ["Progression", f"{p.progress_pct} %"],
+        ["Progression attendue", "—" if attendu is None or p.status == "Terminé" else f"{attendu * 100:.0f} %"],
+        ["Date limite", p.deadline.strftime("%d/%m/%Y") if p.deadline else "Non renseignée"],
+        ["Budget prévisionnel", f"{_fcfa(p.planned_budget)} FCFA"],
+        ["Financement accordé / reçu", f"{_fcfa(granted)} FCFA / {_fcfa(received)} FCFA"],
+        ["Score de risque", f"{evaluation['score']}/100 ({evaluation['level']})" if evaluation else "Non évalué "
+                                                                                                   "(projet non actif)"],
+        ["Dernière mise à jour", f"{p.updated_at:%d/%m/%Y}"],
+    ]
+    r.tables.append(TableData("Fiche du projet", ["Rubrique", "Valeur"], fiche, [30, 70]))
+    r.tables.append(TableData("Jalons", ["Jalon", "Date prévue", "Date réelle", "Situation"],
+                              [[m.title, f"{m.due_date:%d/%m/%Y}",
+                                f"{m.completed_date:%d/%m/%Y}" if m.completed_date else "—",
+                                "Atteint" if m.completed_date else ("En retard" if m.due_date < today else "À venir")]
+                               for m in p.milestones], [40, 20, 20, 20]))
+    r.tables.append(TableData("Financements", ["Source", "Partenaire", "Statut", "Demandé (FCFA)", "Accordé (FCFA)",
+                                               "Reçu (FCFA)"],
+                              [[x.source_type, x.partner.name if x.partner else "—", x.status, x.amount_requested,
+                                x.amount_granted, x.amount_received] for x in p.fundings], [16, 26, 14, 15, 15, 14]))
+    if evaluation and evaluation["factors"]:
+        r.tables.append(TableData("Facteurs de risque (règles transparentes)", ["Facteur", "Points", "Constat"],
+                                  [[x["libelle"], x["points"], x["detail"]] for x in evaluation["factors"]], [25, 8, 67]))
+    alertes = db.scalars(select(Alert).where(Alert.project_id == p.id, Alert.resolved_at.is_(None))).all()
+    r.tables.append(TableData("Alertes actives", ["Niveau", "Type", "Problème", "Action recommandée"],
+                              [[a.level, a.type, a.problem, a.recommended_action] for a in alertes], [10, 18, 36, 36]))
+    r.tables.append(TableData("Historique des statuts", ["Date", "Statut", "Commentaire"],
+                              [[f"{h.changed_at:%d/%m/%Y}", h.new_status, h.comment or ""] for h in p.history],
+                              [18, 30, 52]))
+    r.charts.append(Chart("bar", "Financement du projet (millions FCFA)", ["Budget", "Demandé", "Accordé", "Reçu"],
+                          [("Montant", [round(v / 1e6, 2) for v in (p.planned_budget, requested, granted, received)])]))
     return r
 
 
@@ -327,6 +435,28 @@ def _chart_drawing(c: Chart, width: float) -> Drawing:
     return d
 
 
+def _grille_indicateurs(r: Report, el: list, largeur: float, s_h2, s_petit, s_txt) -> None:
+    el.append(Paragraph("Indicateurs principaux", s_h2))
+    cartes = []
+    for key in r.kpi_keys:
+        lab, _, _ = kpi.KPI_DEFINITIONS[key]
+        cartes.append([Paragraph(_esc(lab), s_petit),
+                       Paragraph(f"<font size=14 color='#4C311F'><b>{_esc(kpi.format_value(key, r.kpis[key]))}</b></font>",
+                                 s_txt)])
+    lignes = [cartes[i:i + 3] for i in range(0, len(cartes), 3)]
+    lignes[-1] += [""] * (3 - len(lignes[-1]))
+    grille = Table([[Table([[c[0]], [c[1]]], colWidths=[largeur / 3 - 8]) if c else "" for c in ln] for ln in lignes],
+                   colWidths=[largeur / 3] * 3)
+    grille.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), GRIS), ("BOX", (0, 0), (-1, -1), 0, colors.white),
+                                ("INNERGRID", (0, 0), (-1, -1), 4, colors.white),
+                                ("VALIGN", (0, 0), (-1, -1), "TOP"), ("TOPPADDING", (0, 0), (-1, -1), 4),
+                                ("BOTTOMPADDING", (0, 0), (-1, -1), 6)]))
+    el.append(grille)
+    el.append(Paragraph("Définitions : " + _esc(" ; ".join(f"{kpi.KPI_DEFINITIONS[k][0]} = {kpi.KPI_DEFINITIONS[k][2]}"
+                                                            for k in r.kpi_keys)), s_petit))
+
+
+
 def render_pdf(r: Report) -> bytes:
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=16 * mm, rightMargin=16 * mm, topMargin=28 * mm,
@@ -381,24 +511,8 @@ def render_pdf(r: Report) -> bytes:
         el += [Spacer(1, 6), t]
 
     # Indicateurs : grille de cartes (3 par ligne)
-    el.append(Paragraph("Indicateurs principaux", s_h2))
-    cartes = []
-    for key in r.kpi_keys:
-        lab, _, _ = kpi.KPI_DEFINITIONS[key]
-        cartes.append([Paragraph(_esc(lab), s_petit),
-                       Paragraph(f"<font size=14 color='#4C311F'><b>{_esc(kpi.format_value(key, r.kpis[key]))}</b></font>",
-                                 s_txt)])
-    lignes = [cartes[i:i + 3] for i in range(0, len(cartes), 3)]
-    lignes[-1] += [""] * (3 - len(lignes[-1]))
-    grille = Table([[Table([[c[0]], [c[1]]], colWidths=[largeur / 3 - 8]) if c else "" for c in ln] for ln in lignes],
-                   colWidths=[largeur / 3] * 3)
-    grille.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), GRIS), ("BOX", (0, 0), (-1, -1), 0, colors.white),
-                                ("INNERGRID", (0, 0), (-1, -1), 4, colors.white),
-                                ("VALIGN", (0, 0), (-1, -1), "TOP"), ("TOPPADDING", (0, 0), (-1, -1), 4),
-                                ("BOTTOMPADDING", (0, 0), (-1, -1), 6)]))
-    el.append(grille)
-    el.append(Paragraph("Définitions : " + _esc(" ; ".join(f"{kpi.KPI_DEFINITIONS[k][0]} = {kpi.KPI_DEFINITIONS[k][2]}"
-                                                            for k in r.kpi_keys)), s_petit))
+    if r.kpi_keys:
+        _grille_indicateurs(r, el, largeur, s_h2, s_petit, s_txt)
 
     if r.commentary:
         el.append(Paragraph("Commentaire analytique", s_h2))

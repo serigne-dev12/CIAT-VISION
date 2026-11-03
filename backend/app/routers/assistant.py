@@ -11,6 +11,7 @@ from app.deps import any_user
 from app.models import AIConversation, User
 from app.schemas import AskIn
 from app.services import assistant as svc
+from app.routers.pilotage import filtres_json
 from app.services.analysis import TOOLS
 from app.services.common import audit, get_int_setting
 
@@ -22,17 +23,17 @@ def status(db: Session = Depends(get_db), user: User = Depends(any_user)):
     return {"ai_available": svc.ai_available(db), "daily_limit": get_int_setting(db, "ai_daily_limit"),
             "used_today": svc.questions_today(db, user),
             "functions": [{"name": t["name"], "description": t["description"]} for t in TOOLS],
-            "examples": ["Combien de projets avons-nous enregistrés ?", "Quel domaine possède le plus de projets ?",
-                         "Combien de projets sont actuellement en retard ?",
-                         "Quelle cohorte présente les meilleurs résultats ?",
-                         "Quel est le montant total des financements ?", "Quel est le taux de réussite des projets ?",
-                         "Quels projets nécessitent une attention particulière ?",
-                         "Quelles recommandations peut-on proposer pour améliorer les performances ?"]}
+            "examples": ["Quels sont les projets les plus performants ?", "Quels projets sont en retard ?",
+                         "Quel domaine présente les meilleurs résultats ?",
+                         "Quel est le taux d'achèvement cette année ?", "Quels projets nécessitent une intervention ?",
+                         "Comment évoluent les financements ?", "Quelles sont les principales difficultés ?",
+                         "Quelles actions recommandes-tu ?"]}
 
 
 @router.post("/ask")
 def ask(data: AskIn, request: Request, db: Session = Depends(get_db), user: User = Depends(any_user)):
-    res = svc.ask(db, user, data.question)
+    actifs = filtres_json(data.filters) if data.filters else None
+    res = svc.ask(db, user, data.question, actifs)
     audit(db, user, "QUESTION_IA", "assistant", None, data.question[:300], request)
     db.commit()
     return res

@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from datetime import date, datetime, time
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -14,6 +15,7 @@ from app.models import AppSetting, AuditLog, Project, User
 from app.schemas import SettingsUpdate, UserCreate, UserOut, UserUpdate
 from app.security import hash_password, password_policy_error
 from app.seed import purge_simulated
+from app.services import backup
 from app.services import projects as svc
 from app.services.common import all_settings, audit
 
@@ -149,3 +151,39 @@ def restore_project(project_id: int, request: Request, db: Session = Depends(get
     audit(db, admin, "RESTAURATION_PROJET", "project", p.id, p.name, request)
     db.commit()
     return {"id": p.id, "name": p.name}
+
+
+# ------------------------------------------------------------------ sauvegarde et restauration (V2)
+@router.get("/backup")
+def download_backup(request: Request, db: Session = Depends(get_db), admin: User = Depends(admin_only)):
+    """Sauvegarde complète (toutes les tables) au format JSON compressé. Contient des données personnelles et les
+    hachages des mots de passe : à conserver en lieu sûr."""
+    contenu, compte = backup.exporter(db)
+    audit(db, admin, "SAUVEGARDE", "data", None, f"{sum(compte.values())} lignes", request)
+    db.commit()
+    nom = f"ciat_vision_sauvegarde_{datetime.now():%Y%m%d_%H%M}.json.gz"
+    return Response(contenu, media_type="application/gzip",
+                    headers={"Content-Disposition": f'attachment; filename="{nom}"'})
+
+
+@router.post("/restore")
+async def restore_backup(request: Request, confirmation: str = Form(...), file: UploadFile = File(...),
+                         db: Session = Depends(get_db), admin: User = Depends(admin_only)):
+    """Remplace TOUTES les données par celles de la sauvegarde, en une seule transaction. Exige « RESTAURER »."""
+    if confirmation != "RESTAURER":
+        raise HTTPException(422, "Saisissez « RESTAURER » pour confirmer : toutes les données actuelles seront "
+                                 "remplacées.")
+    contenu = await file.read(200 * 1024 * 1024 + 1)
+    if len(contenu) > 200 * 1024 * 1024:
+        raise HTTPException(413, "Sauvegarde trop volumineuse (200 Mo maximum).")
+    nom_admin = admin.username
+    try:
+        bilan = backup.restaurer(db, contenu)
+        audit(db, None, "RESTAURATION", "data", None,
+              f"Restauration de la sauvegarde du {bilan['created_at']} : {sum(bilan['tables'].values())} lignes",
+              request, username=nom_admin)
+        db.commit()
+    except Exception:
+        db.rollback()  # tout ou rien
+        raise
+    return bilan

@@ -5,14 +5,14 @@ les chiffres sont donc identiques partout. Les agrégations sont faites en SQL p
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 
-from sqlalchemy import and_, case, exists, func, or_, select
+from sqlalchemy import Float, and_, case, cast, exists, func, literal, or_, select
 from sqlalchemy.orm import Session
 
 from app.constants import (ACTIVE_STATUSES, INCUBATED_STATUSES, ApplicationStatus, ProjectStatus)
-from app.models import Application, Cohort, Domain, Funding, Milestone, Project
+from app.models import Application, Cohort, Domain, Funding, Milestone, Project, Responsable
 from app.services.common import get_int_setting
 
 KPI_DEFINITIONS: dict[str, tuple[str, str, str]] = {
@@ -49,8 +49,67 @@ KPI_DEFINITIONS: dict[str, tuple[str, str, str]] = {
                        "Budget prévisionnel − montants accordés (projets sélectionnés et suivants)."),
 }
 
-DASHBOARD_KPIS = ["total_projects", "applications", "selected", "in_incubation", "prototypes", "completed",
-                  "delayed", "funding_received"]
+# Tableau de bord stratégique V2 : 10 indicateurs
+DASHBOARD_KPIS = ["total_projects", "active", "completed", "delayed", "applications", "selection_rate",
+                  "completion_rate", "avg_progress", "funding_received", "prototypes"]
+
+# ------------------------------------------------------------------ niveaux de performance et de financement (V2)
+PERFORMANCE_LEVELS = ["Élevée", "Moyenne", "Faible", "Non applicable"]
+FUNDING_LEVELS = ["Sans budget", "Non financé", "Faible (< 50 %)", "Partiel (50 à 99 %)", "Complet (≥ 100 %)"]
+
+DEFINITION_PERFORMANCE = (
+    "Écart entre la progression réelle et la progression attendue (part du délai écoulé entre le début de la cohorte "
+    "et la date limite du projet). Élevée : écart ≥ −10 points ; Moyenne : de −30 à −10 points ; Faible : < −30 points "
+    "ou projet suspendu. Un projet terminé est « Élevée ». Non applicable aux candidatures non sélectionnées.")
+DEFINITION_FINANCEMENT = (
+    "Taux de couverture = montants accordés ÷ budget prévisionnel. Non financé : aucun montant accordé ; "
+    "Faible : < 50 % ; Partiel : 50 à 99 % ; Complet : ≥ 100 %. « Sans budget » : budget prévisionnel non renseigné.")
+
+
+def _cohort_col(col):
+    return select(col).where(Cohort.id == Project.cohort_id).correlate(Project).scalar_subquery()
+
+
+def expected_progress_expr(today: date | None = None):
+    """Progression attendue (0 à 1) = part du délai écoulé entre le début de la cohorte et la date limite."""
+    today = today or date.today()
+    debut = _cohort_col(Cohort.start_date)
+    fin = func.coalesce(Project.deadline, _cohort_col(Cohort.end_date))
+    ecoule = cast(literal(today) - debut, Float)
+    duree = cast(fin - debut, Float)
+    return func.least(1.0, func.greatest(0.0, ecoule / func.nullif(duree, 0.0)))
+
+
+def performance_gap_expr(today: date | None = None):
+    """Écart en points : progression réelle − progression attendue."""
+    return Project.progress_pct - 100 * func.coalesce(expected_progress_expr(today), 0.0)
+
+
+def performance_level_expr(today: date | None = None):
+    ecart = performance_gap_expr(today)
+    return case(
+        (Project.status == ProjectStatus.COMPLETED, "Élevée"),
+        (Project.status == ProjectStatus.SUSPENDED, "Faible"),
+        (Project.status.in_(ACTIVE_STATUSES),
+         case((ecart >= -10, "Élevée"), (ecart >= -30, "Moyenne"), else_="Faible")),
+        else_="Non applicable",
+    )
+
+
+def granted_sum_expr():
+    return (select(func.coalesce(func.sum(Funding.amount_granted), 0)).where(Funding.project_id == Project.id)
+            .correlate(Project).scalar_subquery())
+
+
+def funding_level_expr():
+    accorde = granted_sum_expr()
+    return case(
+        (Project.planned_budget <= 0, "Sans budget"),
+        (accorde <= 0, "Non financé"),
+        (accorde * 2 < Project.planned_budget, "Faible (< 50 %)"),
+        (accorde < Project.planned_budget, "Partiel (50 à 99 %)"),
+        else_="Complet (≥ 100 %)",
+    )
 
 
 @dataclass
@@ -61,6 +120,13 @@ class Filters:
     cohort_ids: list[int] = field(default_factory=list)
     domain_ids: list[int] = field(default_factory=list)
     statuses: list[str] = field(default_factory=list)
+    responsible_ids: list[int] = field(default_factory=list)
+    performance_levels: list[str] = field(default_factory=list)
+    funding_levels: list[str] = field(default_factory=list)
+
+    def is_empty(self) -> bool:
+        return not any([self.start_date, self.end_date, self.cohort_ids, self.domain_ids, self.statuses,
+                        self.responsible_ids, self.performance_levels, self.funding_levels])
 
     def conditions(self) -> list:
         c = [Project.is_archived.is_(False)]
@@ -74,6 +140,12 @@ class Filters:
             c.append(Project.domain_id.in_(self.domain_ids))
         if self.statuses:
             c.append(Project.status.in_(self.statuses))
+        if self.responsible_ids:
+            c.append(Project.responsible_id.in_(self.responsible_ids))
+        if self.performance_levels:
+            c.append(performance_level_expr().in_(self.performance_levels))
+        if self.funding_levels:
+            c.append(funding_level_expr().in_(self.funding_levels))
         return c
 
     def describe(self, db: Session) -> str:
@@ -90,6 +162,14 @@ class Filters:
                                                               .order_by(Domain.name))))
         if self.statuses:
             parts.append("Statuts : " + ", ".join(self.statuses))
+        if self.responsible_ids:
+            parts.append("Responsables : " + ", ".join(db.scalars(
+                select(Responsable.full_name).where(Responsable.id.in_(self.responsible_ids))
+                .order_by(Responsable.full_name))))
+        if self.performance_levels:
+            parts.append("Performance : " + ", ".join(self.performance_levels))
+        if self.funding_levels:
+            parts.append("Financement : " + ", ".join(self.funding_levels))
         return " | ".join(parts) or "Toutes les données"
 
 
@@ -268,7 +348,7 @@ def cohorts_comparison(db: Session, f: Filters) -> list[dict]:
     for c in cohorts:
         if f.cohort_ids and c.id not in f.cohort_ids:
             continue
-        sub = Filters(f.start_date, f.end_date, [c.id], f.domain_ids, f.statuses)
+        sub = replace(f, cohort_ids=[c.id])
         k = compute_kpis(db, sub)
         if not k["applications"]:
             continue
@@ -307,3 +387,54 @@ def delayed_projects(db: Session, f: Filters, limit: int | None = None, include_
         out.append(item)
     out.sort(key=lambda x: x["days_late"], reverse=True)
     return out[:limit] if limit else out
+
+
+# ------------------------------------------------------------------ V2 : indicateurs par groupe (comparaisons)
+COMPARISON_KPIS = ["total_projects", "completion_rate", "avg_progress", "delay_rate", "funding_granted", "prototypes"]
+
+
+def group_kpis(db: Session, f: Filters, by: str) -> list[dict]:
+    """Indicateurs calculés séparément pour chaque domaine, cohorte ou responsable, sur le même périmètre filtré
+    (mêmes définitions et mêmes dénominateurs que le tableau de bord)."""
+    if by == "domain":
+        groupes = [(d.id, d.name) for d in db.scalars(select(Domain).order_by(Domain.name))]
+        champ = "domain_ids"
+    elif by == "cohort":
+        groupes = [(c.id, c.name) for c in db.scalars(select(Cohort).order_by(Cohort.year))]
+        champ = "cohort_ids"
+    elif by == "responsible":
+        groupes = [(r.id, r.full_name) for r in db.scalars(select(Responsable).order_by(Responsable.full_name))]
+        champ = "responsible_ids"
+    else:
+        raise ValueError("Regroupement inconnu : domain, cohort ou responsible.")
+    actuel = getattr(f, champ)
+    out = []
+    for gid, nom in groupes:
+        if actuel and gid not in actuel:
+            continue
+        k = compute_kpis(db, replace(f, **{champ: [gid]}))
+        if k["applications"]:
+            out.append({"id": gid, "label": nom, **k})
+    return out
+
+
+def projects_monthly(db: Session, f: Filters) -> list[dict]:
+    """Évolution des projets par mois de dépôt : projets (hors non retenus), sélectionnés, terminés."""
+    mois = func.date_trunc("month", Application.submitted_at).label("mois")
+    rows = db.execute(_base(f).add_columns(
+        mois,
+        func.count(Project.id).filter(Project.status != ProjectStatus.NOT_RETAINED),
+        func.count(Project.id).filter(Application.status == ApplicationStatus.ACCEPTED),
+        func.count(Project.id).filter(Project.status == ProjectStatus.COMPLETED),
+    ).group_by(mois).order_by(mois)).all()
+    return [{"month": m.strftime("%Y-%m"), "projects": a, "selected": b, "completed": c} for m, a, b, c in rows]
+
+
+def level_distribution(db: Session, f: Filters) -> dict:
+    """Répartition des projets par niveau de performance et par niveau de financement."""
+    perf_expr, fin_expr = performance_level_expr(), funding_level_expr()
+    perf = dict(db.execute(_base(f).add_columns(perf_expr, func.count(Project.id)).group_by(perf_expr)).all())
+    fin = dict(db.execute(_base(f).where(Project.status != ProjectStatus.NOT_RETAINED)
+                          .add_columns(fin_expr, func.count(Project.id)).group_by(fin_expr)).all())
+    return {"performance": [{"level": n, "count": perf.get(n, 0)} for n in PERFORMANCE_LEVELS],
+            "funding": [{"level": n, "count": fin.get(n, 0)} for n in FUNDING_LEVELS]}

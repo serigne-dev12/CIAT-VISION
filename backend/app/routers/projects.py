@@ -32,6 +32,8 @@ def list_projects(
     f: Filters = Depends(filters_dep),
     q: str = Query("", max_length=100, description="Recherche : nom, description ou porteur"),
     delayed_only: bool = False,
+    progress_min: int | None = Query(None, ge=0, le=100),
+    progress_max: int | None = Query(None, ge=0, le=100),
     sort: str = Query("updated_at", pattern="^(" + "|".join(TRIS) + ")$"),
     order: str = Query("desc", pattern="^(asc|desc)$"),
     page: int = Query(1, ge=1),
@@ -46,6 +48,10 @@ def list_projects(
         motif = f"%{q.strip()}%"
         conds.append(or_(Project.name.ilike(motif), Project.description.ilike(motif),
                          (ProjectLeader.first_name + " " + ProjectLeader.last_name).ilike(motif)))
+    if progress_min is not None:
+        conds.append(Project.progress_pct >= progress_min)
+    if progress_max is not None:
+        conds.append(Project.progress_pct <= progress_max)
     if delayed_only:
         conds.append(delayed)
     base = (select(Project.id).join(Application, Application.id == Project.application_id)
@@ -63,7 +69,8 @@ def list_projects(
         "cohort": p.cohort.name, "cohort_id": p.cohort_id, "status": p.status, "progress_pct": p.progress_pct,
         "planned_budget": p.planned_budget, "funding_obtained": int(granted), "deadline": p.deadline,
         "is_delayed": bool(is_late), "created_at": p.created_at, "updated_at": p.updated_at,
-        "is_simulated": p.is_simulated,
+        "is_simulated": p.is_simulated, "responsible": p.responsible.full_name if p.responsible else None,
+        "responsible_id": p.responsible_id,
     } for p, granted, is_late in db.execute(stmt).all()]
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
@@ -80,6 +87,7 @@ def _detail(db: Session, p: Project, user: User) -> dict:
         "created_at": p.created_at, "updated_at": p.updated_at, "is_simulated": p.is_simulated,
         "is_archived": p.is_archived, "is_delayed": delayed,
         "domain": {"id": p.domain_id, "name": p.domain.name},
+        "responsible": {"id": p.responsible_id, "name": p.responsible.full_name} if p.responsible else None,
         "cohort": {"id": p.cohort_id, "name": p.cohort.name, "start_date": p.cohort.start_date,
                    "end_date": p.cohort.end_date},
         "leader": {"id": p.leader_id, "first_name": p.leader.first_name, "last_name": p.leader.last_name,
@@ -126,6 +134,8 @@ def update_project(project_id: int, data: ProjectUpdate, request: Request, db: S
                    user: User = Depends(editor)):
     p = svc.get_project(db, project_id)
     champs = data.model_dump(exclude_unset=True)
+    if "responsible_id" in champs:
+        svc.check_responsible(db, champs["responsible_id"])
     if "domain_id" in champs or "cohort_id" in champs:
         svc.check_references(db, champs.get("domain_id", p.domain_id), champs.get("cohort_id", p.cohort_id))
     if "name" in champs or "cohort_id" in champs:

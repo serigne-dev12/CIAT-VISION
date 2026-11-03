@@ -19,7 +19,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import get_settings
 from app.database import SessionLocal
-from app.routers import admin, analytics, assistant, auth, fundings, imports, projects, reference, reports
+from app.routers import (admin, alerts, analytics, assistant, auth, fundings, imports, pilotage, projects, reference,
+                         reports)
 from app.seed import create_demo_accounts, ensure_reference_data, seed_simulated
 
 log = logging.getLogger("ciat")
@@ -61,6 +62,9 @@ async def lifespan(_app: FastAPI):
                 create_demo_accounts(db)
             if settings.seed_simulated_data and seed_simulated(db):
                 log.info("Base peuplée avec les données SIMULÉES de démonstration.")
+            from app.services.alerts import generer
+            generer(db)  # alertes à jour dès le démarrage
+            db.commit()
     except Exception as e:  # la base n'est pas encore migrée : on démarre quand même pour afficher l'erreur
         log.error("Initialisation des données impossible : %s (avez-vous lancé « alembic upgrade head » ?)", e)
     yield
@@ -122,7 +126,7 @@ async def unexpected_error(_request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"detail": "Erreur interne du serveur. L'incident a été journalisé."})
 
 
-for r in (auth, reference, projects, fundings, analytics, assistant, reports, imports, admin):
+for r in (auth, reference, projects, fundings, analytics, assistant, reports, imports, admin, alerts, pilotage):
     app.include_router(r.router, prefix="/api")
 
 

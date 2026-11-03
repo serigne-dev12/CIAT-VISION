@@ -138,6 +138,16 @@ class Evaluation(TimestampMixin, SimulatedMixin, Base):
     application: Mapped[Application] = relationship(back_populates="evaluations")
 
 
+class Responsable(TimestampMixin, SimulatedMixin, Base):
+    """Responsable de suivi du CIAT (chargé d'accompagnement) : suit plusieurs projets (V2)."""
+    __tablename__ = "responsables"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    full_name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    function: Mapped[str | None] = mapped_column(String(100))
+    email: Mapped[str | None] = mapped_column(String(120))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+
+
 class Project(TimestampMixin, SimulatedMixin, Base):
     __tablename__ = "projects"
     __table_args__ = (
@@ -157,6 +167,7 @@ class Project(TimestampMixin, SimulatedMixin, Base):
                                            index=True)
     domain_id: Mapped[int] = mapped_column(ForeignKey("domains.id", ondelete="RESTRICT"), nullable=False)
     cohort_id: Mapped[int] = mapped_column(ForeignKey("cohorts.id", ondelete="RESTRICT"), nullable=False)
+    responsible_id: Mapped[int | None] = mapped_column(ForeignKey("responsables.id", ondelete="SET NULL"), index=True)
     status: Mapped[str] = mapped_column(String(25), nullable=False)
     progress_pct: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     planned_budget: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0", nullable=False)
@@ -168,6 +179,7 @@ class Project(TimestampMixin, SimulatedMixin, Base):
     leader: Mapped[ProjectLeader] = relationship()
     domain: Mapped[Domain] = relationship()
     cohort: Mapped[Cohort] = relationship()
+    responsible: Mapped[Responsable | None] = relationship()
     milestones: Mapped[list[Milestone]] = relationship(back_populates="project", cascade="all, delete-orphan",
                                                        order_by="Milestone.position")
     fundings: Mapped[list[Funding]] = relationship(back_populates="project", cascade="all, delete-orphan",
@@ -290,3 +302,68 @@ class ImportBatch(Base):
     rows_imported: Mapped[int] = mapped_column(Integer, nullable=False)
     rows_skipped: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+# ------------------------------------------------------------------ V2 : alertes et objectifs
+ALERT_LEVELS = ["Critique", "Élevé", "Moyen", "Information"]
+
+
+class Alert(Base):
+    """Alerte détectée par les règles du centre d'alertes. Une alerte est « ouverte » tant que resolved_at est vide ;
+    lorsque la condition disparaît, elle est résolue et passe dans l'historique."""
+    __tablename__ = "alerts"
+    __table_args__ = (
+        CheckConstraint(_in("level", ALERT_LEVELS), name="ck_alerts_level"),
+        Index("ix_alerts_open", "key", "resolved_at"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(80), nullable=False)  # ex. « retard:42 » (déduplication)
+    type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    level: Mapped[str] = mapped_column(String(15), nullable=False, index=True)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    objective_id: Mapped[int | None] = mapped_column(ForeignKey("objectives.id", ondelete="CASCADE"))
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    problem: Mapped[str] = mapped_column(Text, nullable=False)
+    explanation: Mapped[str] = mapped_column(Text, nullable=False)
+    recommended_action: Mapped[str] = mapped_column(Text, nullable=False)
+    detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    archived_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+
+    project: Mapped[Project | None] = relationship()
+
+
+class AlertRead(Base):
+    """Marquage « lu » d'une alerte, propre à chaque utilisateur."""
+    __tablename__ = "alert_reads"
+    alert_id: Mapped[int] = mapped_column(ForeignKey("alerts.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    read_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+OBJECTIVE_INDICATORS = ["projets_accompagnes", "projets_termines", "financements_mobilises", "prototypes",
+                        "taux_achevement"]
+
+
+class Objective(TimestampMixin, SimulatedMixin, Base):
+    """Objectif fixé par les responsables (V2) sur une période, éventuellement limité à une cohorte ou un domaine."""
+    __tablename__ = "objectives"
+    __table_args__ = (
+        CheckConstraint(_in("indicator", OBJECTIVE_INDICATORS), name="ck_objectives_indicator"),
+        CheckConstraint("target_value > 0", name="ck_objectives_target"),
+        CheckConstraint("end_date > start_date", name="ck_objectives_dates"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    label: Mapped[str] = mapped_column(String(150), nullable=False)
+    indicator: Mapped[str] = mapped_column(String(40), nullable=False)
+    target_value: Mapped[float] = mapped_column(Numeric(16, 2), nullable=False)
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date] = mapped_column(Date, nullable=False)
+    cohort_id: Mapped[int | None] = mapped_column(ForeignKey("cohorts.id", ondelete="SET NULL"))
+    domain_id: Mapped[int | None] = mapped_column(ForeignKey("domains.id", ondelete="SET NULL"))
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+
+    cohort: Mapped[Cohort | None] = relationship()
+    domain: Mapped[Domain | None] = relationship()

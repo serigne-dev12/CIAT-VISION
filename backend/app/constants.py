@@ -81,4 +81,6 @@ DEFAULT_SETTINGS = {
     "session_minutes": "60",
     "ai_enabled": "true",
     "ai_daily_limit": "50",
+    "risk_model": "regles",
+    "alerts_generated_at": "",
 }

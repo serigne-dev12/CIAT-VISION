@@ -101,7 +101,7 @@ def test_api_kpis_filtres(client, analyste, db):
     filtre = client.get(f"/api/analytics/kpis?cohort_id={c}", headers=analyste).json()
     v = lambda r, k: next(x["value"] for x in r["all"] if x["key"] == k)  # noqa: E731
     assert v(filtre, "applications") < v(tout, "applications")
-    assert len(tout["dashboard"]) == 8
+    assert len(tout["dashboard"]) == 10  # tableau de bord stratégique V2
     assert "Cohortes" in filtre["perimetre"]
 
 

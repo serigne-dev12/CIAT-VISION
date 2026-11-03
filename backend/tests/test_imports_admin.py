@@ -63,7 +63,11 @@ def test_previsualisation_erreurs_et_doublons(client, coordo):
     r = client.post("/api/imports/commit", headers=coordo,
                     data={"entity": "projects", "confirm": "true", "ignore_invalid": "true"},
                     files={"file": ("projets.csv", contenu, "text/csv")})
-    assert r.status_code == 200 and r.json() == {"imported": 1, "skipped": 4}
+    assert r.status_code == 200 and r.json()["imported"] == 1 and r.json()["skipped"] == 4
+    # Rapport final d'importation : le sort de chaque ligne et le motif des lignes ignorées
+    rapport = r.json()["report"]
+    assert [x["status"] for x in rapport] == ["Importée", "Ignorée", "Ignorée", "Ignorée", "Ignorée"]
+    assert "date invalide" in rapport[1]["reason"] and "doublon" in rapport[2]["reason"]
     assert client.get("/api/projects?q=Import valide A", headers=coordo).json()["total"] == 1
     # Ré-import : détecté comme existant
     r = client.post("/api/imports/preview", headers=coordo, data={"entity": "projects"},

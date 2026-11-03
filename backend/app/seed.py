@@ -18,8 +18,8 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.constants import DEFAULT_MILESTONES, ApplicationStatus, ProjectStatus, Role
-from app.models import (Activity, Application, Cohort, Domain, Evaluation, Funding, Milestone, Partner, Project,
-                        ProjectLeader, ProjectStatusHistory, User)
+from app.models import (Activity, Alert, Application, Cohort, Domain, Evaluation, Funding, Milestone, Objective,
+                        Partner, Project, ProjectLeader, ProjectStatusHistory, Responsable, User)
 from app.security import hash_password
 
 GRAINE = 2026
@@ -80,6 +80,9 @@ PARTENAIRES = [("Fondation Jeunesse Innovante (fictif)", "Financier"), ("SénéT
                ("Programme d'appui aux PME (fictif)", "Financier"), ("Réseau des incubateurs (fictif)", "Institutionnel"),
                ("Groupe industriel Atlantique (fictif)", "Commercial"), ("Fonds vert local (fictif)", "Financier"),
                ("Centre de recherche agronomique (fictif)", "Académique")]
+RESPONSABLES = [("Aïda Mbengue (fictif)", "Chargée d'incubation"), ("Ibrahima Ndour (fictif)", "Chargé d'incubation"),
+                ("Ndèye Fatou Sarr (fictif)", "Coach entrepreneuriat"), ("Mamadou Lamine Ba (fictif)", "Expert technique"),
+                ("Khadija Diallo (fictif)", "Chargée de partenariats"), ("Ousmane Faye (fictif)", "Coach financement")]
 EVALUATEURS = ["Comité CIAT – membre A", "Comité CIAT – membre B", "Comité CIAT – membre C", "Expert externe"]
 ACTIVITES = [("Formation", "Modèle économique et plan d'affaires"), ("Atelier", "Prototypage rapide au FabLab"),
              ("Mentorat", "Séances de mentorat individuel"), ("Événement", "Journée de présentation aux investisseurs"),
@@ -127,18 +130,45 @@ def seed_simulated(db: Session, today: date | None = None) -> bool:
         db.add(p)
         partenaires.append(p)
     db.flush()
+    responsables = []
+    for nom, fonction in RESPONSABLES:
+        responsables.append(Responsable(full_name=nom, function=fonction, is_simulated=True))
+        db.add(responsables[-1])
+    db.flush()
 
     # Les 4 dernières cohortes démarrées + la prochaine (candidatures en cours d'examen)
     derniere = today.year if today >= date(today.year, 3, 1) else today.year - 1
     plan = [(derniere - 3, 45, 0.30), (derniere - 2, 55, 0.34), (derniere - 1, 65, 0.38), (derniere, 80, 0.42)]
     for rang, (annee, nb, part_f) in enumerate(plan):
-        _cohorte(db, rnd, annee, nb, part_f, today, domaines, partenaires, prochaine=False, rang=rang)
-    _cohorte(db, rnd, derniere + 1, 24, 0.45, today, domaines, partenaires, prochaine=True, rang=4)
+        _cohorte(db, rnd, annee, nb, part_f, today, domaines, partenaires, prochaine=False, rang=rang,
+                 responsables=responsables)
+    _cohorte(db, rnd, derniere + 1, 24, 0.45, today, domaines, partenaires, prochaine=True, rang=4,
+             responsables=responsables)
+    _objectifs(db, today)
     db.commit()
     return True
 
 
-def _cohorte(db, rnd, annee, nb, part_f, today, domaines, partenaires, prochaine: bool, rang: int) -> None:
+def _objectifs(db: Session, today: date) -> None:
+    """Objectifs d'exemple pour l'année en cours (SIMULÉS)."""
+    debut, fin = date(today.year, 1, 1), date(today.year, 12, 31)
+    for label, indicateur, cible in [
+        ("Projets à accompagner en " + str(today.year), "projets_accompagnes", 50),
+        ("Projets à terminer en " + str(today.year), "projets_termines", 30),
+        ("Financements à mobiliser en " + str(today.year) + " (FCFA)", "financements_mobilises", 120_000_000),
+        ("Prototypes à réaliser en " + str(today.year), "prototypes", 40),
+    ]:
+        db.add(Objective(label=label, indicator=indicateur, target_value=cible, start_date=debut, end_date=fin,
+                         is_simulated=True))
+    precedente = db.scalar(select(Cohort).where(Cohort.year == today.year - 1))
+    if precedente:  # le taux d'achèvement se juge sur une cohorte dont l'incubation est terminée
+        db.add(Objective(label=f"Taux d'achèvement visé – {precedente.name}", indicator="taux_achevement",
+                         target_value=80, start_date=debut, end_date=fin, cohort_id=precedente.id,
+                         is_simulated=True))
+
+
+def _cohorte(db, rnd, annee, nb, part_f, today, domaines, partenaires, prochaine: bool, rang: int,
+             responsables: list | None = None) -> None:
     debut, fin = date(annee, 3, 1), date(annee, 12, 15)
     c = Cohort(name=f"Cohorte {annee}", year=annee, start_date=debut, end_date=fin, is_simulated=True,
                description=f"Promotion {annee} de l'incubateur (données simulées).")
@@ -222,9 +252,14 @@ def _cohorte(db, rnd, annee, nb, part_f, today, domaines, partenaires, prochaine
             p.deadline = debut_p + timedelta(days=rnd.randint(250, 330))
             hist += _parcours(db, rnd, p, debut_p, p.deadline, today)
             _financements(db, rnd, p, debut, fin, today, partenaires, ancienne=fin < today)
+            if responsables:
+                p.responsible_id = rnd.choices(responsables, [5, 4, 3, 2, 2, 1])[0].id
         for a, b, d in hist:
             db.add(ProjectStatusHistory(project_id=p.id, old_status=a.value if a else None, new_status=b.value,
                                         changed_at=_ts(d), comment="Historique simulé"))
+        # Dernière mise à jour réaliste : dernier événement connu (changement de statut ou jalon atteint)
+        evenements = [d for _, _, d in hist] + [m.completed_date for m in p.milestones if m.completed_date]
+        p.updated_at = _ts(min(today, max(evenements)))
 
 
 def _parcours(db, rnd, p: Project, debut: date, fin: date, today: date) -> list:
@@ -313,6 +348,9 @@ def purge_simulated(db: Session) -> dict:
     compte = {}
     ids = list(db.scalars(select(Project.id).where(Project.is_simulated.is_(True))))
     compte["projets"] = len(ids)
+    if ids:
+        db.execute(delete(Alert).where(Alert.project_id.in_(ids)))
+    db.execute(delete(Objective).where(Objective.is_simulated.is_(True)))
     for model in (Funding, Milestone):
         db.execute(delete(model).where(model.is_simulated.is_(True)))
     if ids:
@@ -320,7 +358,7 @@ def purge_simulated(db: Session) -> dict:
     db.execute(delete(Project).where(Project.is_simulated.is_(True)))
     db.execute(delete(Evaluation).where(Evaluation.is_simulated.is_(True)))
     db.execute(delete(Application).where(Application.is_simulated.is_(True)))
-    for model in (ProjectLeader, Activity, Partner):
+    for model in (ProjectLeader, Activity, Partner, Responsable):
         db.execute(delete(model).where(model.is_simulated.is_(True)))
     # Cohortes simulées : supprimées seulement si aucune donnée réelle ne s'y rattache
     for c in db.scalars(select(Cohort).where(Cohort.is_simulated.is_(True))).all():

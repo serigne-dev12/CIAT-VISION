@@ -143,6 +143,7 @@ class ProjectCreate(BaseModel):
     leader_id: int | None = None
     leader: LeaderIn | None = None
     planned_budget: Amount = 0
+    responsible_id: int | None = None
     deadline: date | None = None
     submitted_at: date | None = None
 
@@ -160,6 +161,7 @@ class ProjectUpdate(BaseModel):
     domain_id: int | None = None
     cohort_id: int | None = None
     planned_budget: Amount | None = None
+    responsible_id: int | None = None
     deadline: date | None = None
 
 
@@ -297,28 +299,90 @@ class SettingsUpdate(BaseModel):
     ai_daily_limit: Annotated[int, Field(ge=0, le=1000)] | None = None
 
 
-class AskIn(BaseModel):
-    question: Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=1000)]
-
-
 class FiltersIn(BaseModel):
+    """Périmètre d'analyse transmis en JSON (rapports, assistant, comparaisons)."""
     start_date: date | None = None
     end_date: date | None = None
     cohort_ids: list[int] = []
     domain_ids: list[int] = []
     statuses: list[Literal[tuple(PROJECT_STATUSES)]] = []  # type: ignore[valid-type]
+    responsible_ids: list[int] = []
+    performance_levels: list[str] = []
+    funding_levels: list[str] = []
 
 
-ReportType = Literal["global", "projects", "cohorts", "fundings", "performance", "delays"]
+class AskIn(BaseModel):
+    question: Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=1000)]
+    # Filtres actifs du tableau de bord : l'assistant en tient compte quand la question ne précise pas de périmètre
+    filters: FiltersIn | None = None
+
+
+ReportType = Literal["global", "domains", "cohorts", "project", "fundings", "alerts", "performance", "projects",
+                     "delays"]
 
 
 class ReportRequest(BaseModel):
     report_type: ReportType
     format: Literal["pdf", "xlsx", "csv"]
     filters: FiltersIn = FiltersIn()
+    project_id: int | None = None  # obligatoire pour le rapport par projet
     commentary: Annotated[str, StringConstraints(max_length=6000)] | None = None
 
 
 class CommentaryRequest(BaseModel):
     report_type: ReportType
     filters: FiltersIn = FiltersIn()
+    project_id: int | None = None
+
+
+# ------------------------------------------------------------------ V2 : objectifs, comparaisons, responsables
+class ObjectiveIn(BaseModel):
+    label: Text150
+    indicator: Literal["projets_accompagnes", "projets_termines", "financements_mobilises", "prototypes",
+                       "taux_achevement"]
+    target_value: Annotated[float, Field(gt=0, le=100_000_000_000)]
+    start_date: date
+    end_date: date
+    cohort_id: int | None = None
+    domain_id: int | None = None
+
+    @field_validator("end_date")
+    @classmethod
+    def _dates(cls, v: date, info):
+        if info.data.get("start_date") and v <= info.data["start_date"]:
+            raise ValueError("La fin de la période doit être postérieure au début.")
+        return v
+
+    @field_validator("target_value")
+    @classmethod
+    def _taux(cls, v: float, info):
+        if info.data.get("indicator") == "taux_achevement" and v > 100:
+            raise ValueError("Un taux visé ne peut pas dépasser 100 %.")
+        return v
+
+
+class PeriodIn(BaseModel):
+    label: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=60)] | None = None
+    start_date: date
+    end_date: date
+
+    @field_validator("end_date")
+    @classmethod
+    def _dates(cls, v: date, info):
+        if info.data.get("start_date") and v < info.data["start_date"]:
+            raise ValueError("La fin de la période doit être postérieure au début.")
+        return v
+
+
+class CompareIn(BaseModel):
+    dimension: Literal["domain", "cohort", "responsible", "project", "period"]
+    ids: list[int] = []
+    periods: list[PeriodIn] = []
+    filters: FiltersIn = FiltersIn()
+
+
+class ResponsableIn(BaseModel):
+    full_name: Text100
+    function: Annotated[str, StringConstraints(strip_whitespace=True, max_length=100)] | None = None
+    email: EmailStr | None = None
+    is_active: bool = True
